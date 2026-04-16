@@ -55,7 +55,7 @@ PARTE 2 — BACKEND NO RENDER
    DEBUG               | False
    ALLOWED_HOSTS       | auracash-backend.onrender.com
    DATABASE_URL        | (selecione "From Database" → auracash-db → connectionString)
-   FRONTEND_URL        | https://auracash.vercel.app  ← ajuste depois se o nome for diferente
+   FRONTEND_URL        | https://aura-cash.vercel.app  ← ajuste depois se o nome for diferente
 
    SECRET_KEY é gerado automaticamente pelo render.yaml — não precisa preencher.
 
@@ -107,7 +107,7 @@ PARTE 3 — FRONTEND NA VERCEL
    Aguarde o build terminar (~1 minuto).
 
 7. A Vercel vai gerar uma URL como:
-   https://auracash.vercel.app
+   https://aura-cash.vercel.app
 
 ──────────────────────────────────────────────────────────────────
 PARTE 4 — ATUALIZAR CORS NO RENDER (passo obrigatório)
@@ -137,7 +137,7 @@ Se quiser acessar o painel admin do Django:
 RESUMO DE URLS
 ──────────────────────────────────────────────────────────────────
 
-  Aplicação:        https://auracash.vercel.app
+  Aplicação:        https://aura-cash.vercel.app
   API (GraphQL):    https://auracash-backend.onrender.com/graphql/
   Admin Django:     https://auracash-backend.onrender.com/admin/
 
