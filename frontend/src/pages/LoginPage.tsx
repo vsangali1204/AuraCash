@@ -77,12 +77,14 @@ export function LoginPage() {
             Entrar
           </Button>
 
-          <p className="text-center text-sm text-gray-500">
-            Não tem conta?{" "}
-            <Link to="/register" className="text-violet-400 hover:text-violet-300">
-              Criar conta
+          <div className="border-t border-surface-border pt-4">
+            <p className="text-center text-sm text-gray-500 mb-3">Não tem conta ainda?</p>
+            <Link to="/register">
+              <Button type="button" variant="secondary" className="w-full" size="lg">
+                Criar conta grátis
+              </Button>
             </Link>
-          </p>
+          </div>
         </form>
       </div>
     </div>
