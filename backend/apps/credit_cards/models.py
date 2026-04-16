@@ -100,7 +100,7 @@ class Invoice(models.Model):
 def get_first_invoice_month(credit_card: CreditCard, purchase_date: date) -> date:
     """Retorna o primeiro dia do mês da fatura que receberá a compra."""
     closing_day = credit_card.closing_day
-    if purchase_date.day <= closing_day:
+    if purchase_date.day < closing_day:
         return purchase_date.replace(day=1)
     # Após o fechamento → próxima fatura
     if purchase_date.month == 12:
