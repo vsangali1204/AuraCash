@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: auracash
+      POSTGRES_USER: auracash
+      POSTGRES_PASSWORD: auracash123
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auracash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DEBUG: "True"
+      SECRET_KEY: "django-insecure-local-dev-key-change-in-production"
+      DB_NAME: auracash
+      DB_USER: auracash
+      DB_PASSWORD: auracash123
+      DB_HOST: db
+      DB_PORT: "5432"
+      FRONTEND_URL: "http://localhost:5173"
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+
+volumes:
+  pgdata:

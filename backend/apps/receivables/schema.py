@@ -1,0 +1,198 @@
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional
+
+import strawberry
+from django.db.models import Sum
+
+from shared.auth import require_auth
+from .models import Receipt
+from apps.transactions.schema import TransactionType, map_transaction
+from apps.transactions.models import Transaction as TransactionModel
+
+
+@strawberry.type
+class ReceiptType:
+    id: strawberry.ID
+    transaction_id: strawberry.ID
+    transaction_description: str
+    amount_received: float
+    receipt_date: date
+    destination_account_id: strawberry.ID
+    destination_account_name: str
+    notes: Optional[str]
+    created_at: datetime
+
+
+@strawberry.type
+class ReceivableSummaryType:
+    debtor_name: str
+    total_amount: float
+    received_amount: float
+    pending_amount: float
+    transaction_count: int
+
+
+def map_receipt(r: Receipt) -> ReceiptType:
+    return ReceiptType(
+        id=strawberry.ID(str(r.id)),
+        transaction_id=strawberry.ID(str(r.transaction_id)),
+        transaction_description=r.transaction.description,
+        amount_received=float(r.amount_received),
+        receipt_date=r.receipt_date,
+        destination_account_id=strawberry.ID(str(r.destination_account_id)),
+        destination_account_name=r.destination_account.name,
+        notes=r.notes,
+        created_at=r.created_at,
+    )
+
+
+@strawberry.input
+class CreateReceiptInput:
+    transaction_id: strawberry.ID
+    amount_received: float
+    receipt_date: date
+    destination_account_id: strawberry.ID
+    notes: Optional[str] = None
+
+
+@strawberry.type
+class ReceivableQuery:
+    @strawberry.field
+    def receivable_summary(
+        self, info: strawberry.types.Info
+    ) -> list[ReceivableSummaryType]:
+        from apps.transactions.models import Transaction
+
+        user = require_auth(info)
+
+        # Exclui transações-pai das parcelas (parent_transaction=NULL e total_installments>1)
+        base_qs = Transaction.objects.filter(
+            user=user,
+            is_receivable=True,
+            receipt_status__in=["pending", "partial"],
+        ).exclude(parent_transaction__isnull=True, total_installments__gt=1)
+
+        txs = base_qs.values("debtor_name").annotate(
+            total=Sum("amount"),
+            received=Sum("received_amount"),
+        )
+
+        return [
+            ReceivableSummaryType(
+                debtor_name=row["debtor_name"] or "Sem nome",
+                total_amount=float(row["total"]),
+                received_amount=float(row["received"]),
+                pending_amount=float(row["total"] - row["received"]),
+                transaction_count=base_qs.filter(debtor_name=row["debtor_name"]).count(),
+            )
+            for row in txs
+        ]
+
+    @strawberry.field
+    def receivable_transactions(
+        self,
+        info: strawberry.types.Info,
+        debtor_name: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> list[TransactionType]:
+        user = require_auth(info)
+        # Exclui transações-pai das parcelas (parent_transaction=NULL e total_installments>1)
+        qs = TransactionModel.objects.filter(
+            user=user, is_receivable=True
+        ).exclude(parent_transaction__isnull=True, total_installments__gt=1).select_related(
+            "account", "credit_card", "invoice", "category"
+        ).order_by("competence_date", "date")
+        if debtor_name:
+            qs = qs.filter(debtor_name=debtor_name)
+        if status:
+            qs = qs.filter(receipt_status=status)
+        return [map_transaction(t) for t in qs]
+
+    @strawberry.field
+    def receipts(
+        self, info: strawberry.types.Info, transaction_id: strawberry.ID
+    ) -> list[ReceiptType]:
+        user = require_auth(info)
+        return [
+            map_receipt(r)
+            for r in Receipt.objects.filter(
+                transaction_id=transaction_id,
+                transaction__user=user,
+            ).select_related("destination_account", "transaction")
+        ]
+
+
+@strawberry.type
+class ReceivableMutation:
+    @strawberry.mutation
+    def create_receipt(
+        self, info: strawberry.types.Info, input: CreateReceiptInput
+    ) -> ReceiptType:
+        from apps.accounts.models import Account
+
+        user = require_auth(info)
+
+        tx = TransactionModel.objects.filter(id=input.transaction_id, user=user, is_receivable=True).first()
+        if not tx:
+            raise Exception("Lançamento a receber não encontrado.")
+
+        dest_account = Account.objects.filter(id=input.destination_account_id, user=user).first()
+        if not dest_account:
+            raise Exception("Conta destino não encontrada.")
+
+        amount = Decimal(str(input.amount_received))
+        remaining = tx.amount - tx.received_amount
+        if amount > remaining:
+            raise Exception(f"Valor excede o restante pendente (R$ {remaining:.2f}).")
+
+        receipt = Receipt.objects.create(
+            transaction=tx,
+            amount_received=amount,
+            receipt_date=input.receipt_date,
+            destination_account=dest_account,
+            notes=input.notes,
+        )
+
+        # Cria receita na conta destino
+        TransactionModel.objects.create(
+            user=user,
+            description=f"Recebimento: {tx.description} ({tx.debtor_name})",
+            amount=amount,
+            transaction_type="income",
+            payment_method="pix",
+            date=input.receipt_date,
+            account=dest_account,
+            category=tx.category,
+            notes=input.notes,
+        )
+
+        # Atualiza status do lançamento original
+        tx.received_amount += amount
+        if tx.received_amount >= tx.amount:
+            tx.receipt_status = "received"
+        else:
+            tx.receipt_status = "partial"
+        tx.save()
+
+        return map_receipt(receipt)
+
+    @strawberry.mutation
+    def delete_receipt(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
+        user = require_auth(info)
+        receipt = Receipt.objects.filter(id=id, transaction__user=user).select_related("transaction").first()
+        if not receipt:
+            raise Exception("Recebimento não encontrado.")
+
+        # Reverte o received_amount na transaction
+        tx = receipt.transaction
+        tx.received_amount -= receipt.amount_received
+        if tx.received_amount <= 0:
+            tx.received_amount = Decimal("0")
+            tx.receipt_status = "pending"
+        else:
+            tx.receipt_status = "partial"
+        tx.save()
+
+        receipt.delete()
+        return True
