@@ -1,24 +1,46 @@
 ╔══════════════════════════════════════════════════════════════════╗
 ║           TUTORIAL DE DEPLOY — AuraCash                         ║
 ║   Backend: Render  |  Frontend: Vercel                          ║
-║   Banco de dados: PostgreSQL externo (uhserver.com)             ║
+║   Banco de dados: PostgreSQL 16 (Render Free)                   ║
 ╚══════════════════════════════════════════════════════════════════╝
+
+⚠  MOTIVO DA MUDANÇA DE BANCO
+   O banco em uhserver.com usa PostgreSQL 9.5, que é incompatível
+   com Django 5 (exige PostgreSQL 14+). Por isso usamos o banco
+   gratuito do próprio Render, que está na versão 16.
 
 ORDEM: faça o Render PRIMEIRO, pois você vai precisar da URL do
 backend para configurar o Vercel.
 
 ──────────────────────────────────────────────────────────────────
-PARTE 1 — BACKEND NO RENDER
+PARTE 1 — BANCO DE DADOS NO RENDER
 ──────────────────────────────────────────────────────────────────
 
 1. Acesse https://render.com e faça login (pode usar conta Google).
 
-2. No dashboard, clique em "New +" → "Web Service".
+2. No dashboard, clique em "New +" → "PostgreSQL".
+   - Name:         auracash-db
+   - Database:     auracash
+   - User:         aurauser
+   - Region:       Oregon (US West) — qualquer uma
+   - Plan:         Free
+   - Clique em "Create Database"
+   - Aguarde ficar "Available".
+
+   O Render vai gerar a DATABASE_URL automaticamente.
+   Você não precisa copiá-la manualmente — o render.yaml já faz
+   a ligação entre o banco e o serviço web.
+
+──────────────────────────────────────────────────────────────────
+PARTE 2 — BACKEND NO RENDER
+──────────────────────────────────────────────────────────────────
+
+3. No dashboard, clique em "New +" → "Web Service".
    - Conecte sua conta GitHub se ainda não conectou.
    - Selecione o repositório "AuraCash".
    - Preencha os campos:
        Name:             auracash-backend
-       Region:           Oregon (US West) — qualquer uma
+       Region:           a MESMA do banco (passo 2)
        Branch:           main
        Root Directory:   backend
        Runtime:          Python 3
@@ -26,43 +48,41 @@ PARTE 1 — BACKEND NO RENDER
        Start Command:    gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
        Plan:             Free
 
-3. Role para baixo até "Environment Variables" e adicione:
+4. Role para baixo até "Environment Variables" e adicione:
 
    Chave               | Valor
    ——————————————————— | ————————————————————————————————————————————————————————
-   SECRET_KEY          | (gere uma senha forte — veja nota abaixo)
    DEBUG               | False
    ALLOWED_HOSTS       | auracash-backend.onrender.com
-   DATABASE_URL        | postgresql://aurauser:S%40ngali9962@auracash.postgres.uhserver.com:5432/auracash
+   DATABASE_URL        | (selecione "From Database" → auracash-db → connectionString)
    FRONTEND_URL        | https://auracash.vercel.app  ← ajuste depois se o nome for diferente
 
-   Opcional (deixe vazio se não usar Celery agora):
-   REDIS_URL           |
+   SECRET_KEY é gerado automaticamente pelo render.yaml — não precisa preencher.
 
-   ┌─ ATENÇÃO: caractere especial na senha ─────────────────────────┐
-   │ A senha contém "@" que precisa ser codificado como "%40"       │
-   │ na DATABASE_URL para não quebrar a URL de conexão.             │
-   │ A URL já está correta no quadro acima — copie exatamente.      │
+   ┌─ Como vincular DATABASE_URL ao banco criado ───────────────────┐
+   │ Ao adicionar a variável DATABASE_URL, escolha a opção          │
+   │ "From Database" (em vez de "Text"), selecione "auracash-db"    │
+   │ e a propriedade "Connection String". O Render preenche         │
+   │ automaticamente e mantém sincronizado.                         │
    └────────────────────────────────────────────────────────────────┘
 
-   ┌─ Como gerar o SECRET_KEY ──────────────────────────────────────┐
-   │ No terminal local (com Python instalado):                      │
+   ┌─ Como gerar o SECRET_KEY (caso precise manualmente) ───────────┐
+   │ No terminal local:                                             │
    │   python -c "import secrets; print(secrets.token_hex(50))"    │
-   │ Cole o resultado no campo SECRET_KEY.                          │
    └────────────────────────────────────────────────────────────────┘
 
-4. Clique em "Create Web Service".
+5. Clique em "Create Web Service".
    O Render vai instalar dependências, rodar as migrations e subir.
    Aguarde o status ficar "Live" (3–5 minutos).
 
-5. Anote a URL do backend:
+6. Anote a URL do backend:
    https://auracash-backend.onrender.com
 
    Teste abrindo: https://auracash-backend.onrender.com/graphql/
    Deve aparecer o playground do Strawberry GraphQL.
 
 ──────────────────────────────────────────────────────────────────
-PARTE 2 — FRONTEND NA VERCEL
+PARTE 3 — FRONTEND NA VERCEL
 ──────────────────────────────────────────────────────────────────
 
 1. Acesse https://vercel.com e faça login com sua conta GitHub.
@@ -90,7 +110,7 @@ PARTE 2 — FRONTEND NA VERCEL
    https://auracash.vercel.app
 
 ──────────────────────────────────────────────────────────────────
-PARTE 3 — ATUALIZAR CORS NO RENDER (passo obrigatório)
+PARTE 4 — ATUALIZAR CORS NO RENDER (passo obrigatório)
 ──────────────────────────────────────────────────────────────────
 
 Após ter a URL final da Vercel, volte ao Render para liberar o CORS:
@@ -102,7 +122,7 @@ Após ter a URL final da Vercel, volte ao Render para liberar o CORS:
 3. Clique em "Save Changes" — o Render vai redeployar automaticamente.
 
 ──────────────────────────────────────────────────────────────────
-PARTE 4 — CRIAR SUPERUSUÁRIO (opcional)
+PARTE 5 — CRIAR SUPERUSUÁRIO (opcional)
 ──────────────────────────────────────────────────────────────────
 
 Se quiser acessar o painel admin do Django:
@@ -121,17 +141,13 @@ RESUMO DE URLS
   API (GraphQL):    https://auracash-backend.onrender.com/graphql/
   Admin Django:     https://auracash-backend.onrender.com/admin/
 
-  Banco de dados:   auracash.postgres.uhserver.com
-  Database:         auracash
-  User:             aurauser
-
 ──────────────────────────────────────────────────────────────────
 ATENÇÃO — PLANO FREE DO RENDER
 ──────────────────────────────────────────────────────────────────
 
-No plano gratuito, o servidor "dorme" após 15 minutos sem uso.
-A primeira requisição após o sono pode demorar ~30 segundos
-para o servidor acordar. Isso é normal no free tier.
+- O servidor "dorme" após 15 minutos sem uso. A primeira requisição
+  pode demorar ~30 segundos para acordar. Normal no free tier.
 
-Seu banco de dados é externo (uhserver.com), então não há risco
-de expiração como aconteceria com o PostgreSQL free do próprio Render.
+- O banco de dados PostgreSQL free no Render expira após 90 dias.
+  Antes de expirar, faça backup ou migre para um plano pago.
+  Para fazer backup: na aba do banco no Render, clique em "Backups".
