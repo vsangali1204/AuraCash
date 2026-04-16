@@ -1,8 +1,5 @@
-databases:
-  - name: auracash-db
-    databaseName: auracash
-    user: auracash
-    plan: free
+# Banco de dados externo (uhserver.com) — não é provisionado pelo Render.
+# A variável DATABASE_URL é preenchida manualmente nas env vars do serviço.
 
 services:
   - type: web
@@ -20,12 +17,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: auracash-db
-          property: connectionString
+        sync: false   # preencher com a URL do banco externo (ver DEPLOY.txt)
       - key: ALLOWED_HOSTS
         sync: false   # preencher com o domínio do Render após o primeiro deploy
       - key: FRONTEND_URL
         sync: false   # preencher com a URL do Vercel após deploy do frontend
       - key: REDIS_URL
-        sync: false   # preencher se usar Redis/Celery (opcional no plano free)
+        sync: false   # opcional — deixar vazio se não usar Celery
