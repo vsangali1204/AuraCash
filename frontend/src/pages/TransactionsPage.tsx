@@ -104,7 +104,7 @@ export function TransactionsPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       transactionType: "expense",
-      paymentMethod: "pix",
+      paymentMethod: "credit",
       date: todayISO(),
       isReceivable: false,
       totalInstallments: 1,

@@ -22,6 +22,20 @@ class InvoiceType:
 
 
 @strawberry.type
+class InvoiceWithCardType:
+    id: strawberry.ID
+    reference_month: date
+    closing_date: date
+    due_date: date
+    total_amount: float
+    paid_amount: float
+    status: str
+    credit_card_id: strawberry.ID
+    credit_card_name: str
+    credit_card_brand: str
+
+
+@strawberry.type
 class CreditCardType:
     id: strawberry.ID
     name: str
@@ -35,6 +49,21 @@ class CreditCardType:
     account_name: Optional[str]
     created_at: datetime
     current_invoice: Optional[InvoiceType]
+
+
+def map_invoice_with_card(inv: Invoice) -> InvoiceWithCardType:
+    return InvoiceWithCardType(
+        id=strawberry.ID(str(inv.id)),
+        reference_month=inv.reference_month,
+        closing_date=inv.closing_date,
+        due_date=inv.due_date,
+        total_amount=float(inv.total_amount),
+        paid_amount=float(inv.paid_amount),
+        status=inv.status,
+        credit_card_id=strawberry.ID(str(inv.credit_card_id)),
+        credit_card_name=inv.credit_card.name,
+        credit_card_brand=inv.credit_card.brand,
+    )
 
 
 def map_invoice(inv: Invoice) -> InvoiceType:
@@ -51,10 +80,8 @@ def map_invoice(inv: Invoice) -> InvoiceType:
 
 def map_credit_card(card: CreditCard) -> CreditCardType:
     today = date.today()
-    # Fatura corrente: invoice do mês vigente
-    first = get_first_invoice_month(card, today)
-    # O mês corrente pode ainda estar aberto
-    current_ref = today.replace(day=1)
+    # Fatura corrente: mês em que novas compras entrarão hoje
+    current_ref = get_first_invoice_month(card, today)
     current_inv = Invoice.objects.filter(credit_card=card, reference_month=current_ref).first()
 
     return CreditCardType(
@@ -141,6 +168,16 @@ class CreditCardQuery:
         if not inv:
             raise Exception("Fatura não encontrada.")
         return map_invoice(inv)
+
+    @strawberry.field
+    def all_invoices(self, info: strawberry.types.Info) -> list[InvoiceWithCardType]:
+        user = require_auth(info)
+        invoices = (
+            Invoice.objects.filter(credit_card__user=user, credit_card__is_active=True)
+            .select_related("credit_card")
+            .order_by("-reference_month", "credit_card__name")
+        )
+        return [map_invoice_with_card(inv) for inv in invoices]
 
 
 # ── Mutations ─────────────────────────────────────────────────────────────────

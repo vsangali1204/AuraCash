@@ -12,6 +12,7 @@ import { AccountsPage } from "@/pages/AccountsPage";
 import { CategoriesPage } from "@/pages/CategoriesPage";
 import { TransactionsPage } from "@/pages/TransactionsPage";
 import { CreditCardsPage } from "@/pages/CreditCardsPage";
+import { InvoicesPage } from "@/pages/InvoicesPage";
 import { RecurrencesPage } from "@/pages/RecurrencesPage";
 import { ReceivablesPage } from "@/pages/ReceivablesPage";
 import { CalendarPage } from "@/pages/CalendarPage";
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="/transactions" element={<TransactionsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/credit-cards" element={<CreditCardsPage />} />
+            <Route path="/invoices" element={<InvoicesPage />} />
             <Route path="/recurrences" element={<RecurrencesPage />} />
             <Route path="/receivables" element={<ReceivablesPage />} />
             <Route path="/calendar" element={<CalendarPage />} />

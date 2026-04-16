@@ -34,6 +34,12 @@ export interface Invoice {
   status: string;
 }
 
+export interface InvoiceWithCard extends Invoice {
+  creditCardId: string;
+  creditCardName: string;
+  creditCardBrand: string;
+}
+
 export interface CreditCard {
   id: string;
   name: string;

@@ -91,3 +91,20 @@ export const PAY_INVOICE_MUTATION = gql`
     }
   }
 `;
+
+export const ALL_INVOICES_QUERY = gql`
+  query AllInvoices {
+    allInvoices {
+      id
+      referenceMonth
+      closingDate
+      dueDate
+      totalAmount
+      paidAmount
+      status
+      creditCardId
+      creditCardName
+      creditCardBrand
+    }
+  }
+`;
