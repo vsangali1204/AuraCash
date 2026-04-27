@@ -142,12 +142,12 @@ export function CreditCardsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Cartões de Crédito</h1>
           <p className="text-sm text-gray-500">{cards.length} cartão(s) cadastrado(s)</p>
         </div>
-        <Button onClick={openCreate}><Plus size={16} /> Novo cartão</Button>
+        <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Novo cartão</Button>
       </div>
 
       {loading ? (
@@ -186,7 +186,7 @@ export function CreditCardsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-3 gap-4">
+                  <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-4">
                     <div>
                       <p className="text-xs text-gray-500">Limite total</p>
                       <p className="text-sm font-semibold text-white">{formatCurrency(card.totalLimit)}</p>
@@ -271,7 +271,7 @@ export function CreditCardsPage() {
       <Modal open={modalOpen} onClose={closeCardModal} title={editing ? "Editar cartão" : "Novo cartão"}>
         <form onSubmit={cardForm.handleSubmit(onCardSubmit)} className="space-y-4">
           <Input label="Nome do cartão" placeholder="Ex: Nubank Mastercard" error={cardForm.formState.errors.name?.message} {...cardForm.register("name")} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Bandeira" options={BRAND_OPTIONS} {...cardForm.register("brand")} />
             <Input label="Limite total (R$)" type="number" step="0.01" error={cardForm.formState.errors.totalLimit?.message} {...cardForm.register("totalLimit")} />
           </div>

@@ -875,7 +875,7 @@ export function InvoicesPage() {
       {/* ── Filtros ── */}
       <div className="flex flex-wrap items-center gap-3">
         {viewMode === "invoice" && (
-          <div className="w-48">
+          <div className="w-full sm:w-48">
             <Select
               options={cardFilterOptions}
               value={filterCard}
@@ -883,7 +883,7 @@ export function InvoicesPage() {
             />
           </div>
         )}
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <Select
             options={STATUS_OPTIONS}
             value={filterStatus}

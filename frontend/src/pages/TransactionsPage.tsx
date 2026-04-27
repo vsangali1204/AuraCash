@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { Drawer } from "@/components/ui/Drawer";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import {
@@ -90,7 +89,7 @@ function monthISORangeDates(year: number, month: number) {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function TransactionsPage() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [search, setSearch] = useState("");
@@ -169,13 +168,13 @@ export function TransactionsPage() {
 
   const [createTransaction, { loading: creating }] = useMutation(CREATE_TRANSACTION_MUTATION, {
     refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
-    onCompleted: () => { toast.success("Lançamento criado!"); closeDrawer(); },
+    onCompleted: () => { toast.success("Lançamento criado!"); closeModal(); },
     onError: (e) => toast.error(e.message),
   });
 
   const [updateTransaction, { loading: updating }] = useMutation(UPDATE_TRANSACTION_MUTATION, {
     refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
-    onCompleted: () => { toast.success("Lançamento atualizado!"); closeDrawer(); },
+    onCompleted: () => { toast.success("Lançamento atualizado!"); closeModal(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -203,7 +202,7 @@ export function TransactionsPage() {
       competenceDate: "",
       notes: "",
     });
-    setDrawerOpen(true);
+    setModalOpen(true);
     // foca na descrição após animação
     setTimeout(() => descRef.current?.focus(), 100);
   }
@@ -226,12 +225,12 @@ export function TransactionsPage() {
       notes: t.notes ?? "",
       totalInstallments: t.totalInstallments ?? 1,
     });
-    setDrawerOpen(true);
+    setModalOpen(true);
     setTimeout(() => descRef.current?.focus(), 100);
   }
 
-  function closeDrawer() {
-    setDrawerOpen(false);
+  function closeModal() {
+    setModalOpen(false);
     setEditing(null);
   }
 
@@ -490,8 +489,8 @@ export function TransactionsPage() {
         </div>
       )}
 
-      {/* Drawer de criação/edição */}
-      <Drawer open={drawerOpen} onClose={closeDrawer} title={editing ? "Editar lançamento" : "Novo lançamento"}>
+      {/* Modal de criação/edição */}
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar lançamento" : "Novo lançamento"} size="lg">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
           {/* Aviso para parcelados */}
@@ -593,7 +592,7 @@ export function TransactionsPage() {
             </Button>
           </div>
         </form>
-      </Drawer>
+      </Modal>
 
       {/* Modal de confirmação de exclusão */}
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir lançamento" size="sm">

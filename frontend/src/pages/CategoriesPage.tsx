@@ -150,7 +150,7 @@ export function CategoriesPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {[
           { value: "all", label: "Todas" },
           { value: "expense", label: "Despesas" },

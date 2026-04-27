@@ -165,14 +165,14 @@ export function RecurrencesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Recorrências</h1>
           <p className="text-sm text-gray-500">
             {allRecurrences.filter((r) => r.isActive).length} ativa(s) de {allRecurrences.length} total
           </p>
         </div>
-        <Button onClick={openCreate}><Plus size={16} /> Nova recorrência</Button>
+        <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Nova recorrência</Button>
       </div>
 
       {/* Tabs */}
@@ -245,18 +245,18 @@ export function RecurrencesPage() {
       <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar recorrência" : "Nova recorrência"} size="lg">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input label="Descrição" placeholder="Ex: Salário, Spotify, Aluguel" error={errors.description?.message} {...register("description")} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Tipo" options={RECURRENCE_TYPE_OPTIONS} {...register("recurrenceType")} />
             <Input label="Valor (R$)" type="number" step="0.01" error={errors.amount?.message} {...register("amount")} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label="Meio de pagamento" options={PAYMENT_OPTIONS} {...register("paymentMethod")} />
             <Select label="Conta" options={accountOptions} placeholder="Selecione" error={errors.accountId?.message} {...register("accountId")} />
           </div>
           {paymentMethod === "credit" && (
             <Select label="Cartão de crédito" options={cardOptions} {...register("creditCardId")} />
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Dia do mês (1-31)" type="number" min={1} max={31} error={errors.dayOfMonth?.message} {...register("dayOfMonth")} />
             <Select label="Categoria" options={categoryOptions} {...register("categoryId")} />
           </div>
@@ -264,7 +264,7 @@ export function RecurrencesPage() {
             <input type="checkbox" id="useBusinessDay" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-violet-500" {...register("useBusinessDay")} />
             <label htmlFor="useBusinessDay" className="text-sm text-gray-300">Usar N-ésimo dia útil do mês</label>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Data de início" type="date" error={errors.startDate?.message} {...register("startDate")} />
             <Input label="Data de término (opcional)" type="date" {...register("endDate")} />
           </div>
