@@ -1,14 +1,21 @@
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
 import strawberry
-from django.db.models import Sum
+from django.db.models import Case, DecimalField, F, Sum, Value, When
+from django.db.models.functions import Coalesce, ExtractMonth, ExtractYear
 
 from shared.auth import require_auth
 from apps.accounts.schema import AccountType, map_account
 from apps.categories.schema import CategoryType, map_category
 from .models import Transaction
+
+logger = logging.getLogger(__name__)
+
+VALID_TRANSACTION_TYPES = {"income", "expense", "transfer"}
+VALID_PAYMENT_METHODS = {"debit", "pix", "cash", "transfer", "credit"}
 
 
 # ── Forward refs para evitar importação circular ──────────────────────────────
@@ -65,8 +72,8 @@ def map_transaction(t: Transaction) -> TransactionType:
                 name=cc.name,
                 brand=cc.brand,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Falha ao carregar credit_card para transaction %s: %s", t.id, e)
 
     invoice_ref = None
     if t.invoice_id:
@@ -78,8 +85,8 @@ def map_transaction(t: Transaction) -> TransactionType:
                 due_date=inv.due_date,
                 status=inv.status,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Falha ao carregar invoice para transaction %s: %s", t.id, e)
 
     return TransactionType(
         id=strawberry.ID(str(t.id)),
@@ -246,7 +253,7 @@ class TransactionQuery:
         qs = Transaction.objects.filter(
             invoice_id=invoice_id,
             credit_card__user=user,
-        ).select_related("account", "credit_card", "invoice", "category")
+        ).select_related("account", "transfer_account", "credit_card", "invoice", "category")
         return [map_transaction(t) for t in qs]
 
     @strawberry.field
@@ -264,37 +271,76 @@ class TransactionQuery:
         self, info: strawberry.types.Info, year: int, month: int
     ) -> DashboardSummary:
         from apps.accounts.models import Account
-        from apps.accounts.schema import _compute_balance
-        from apps.transactions.models import Transaction
 
         user = require_auth(info)
 
-        # Saldo total
-        accounts = Account.objects.filter(user=user, is_active=True)
-        total_balance = sum(_compute_balance(a) for a in accounts)
+        # ── Saldo total: 2 queries ao invés de 4×N ───────────────────────────
+        accounts = list(Account.objects.filter(user=user, is_active=True))
+        initial_sum = sum(float(a.initial_balance) for a in accounts)
+        account_ids = [a.id for a in accounts]
 
-        # Mês corrente
-        month_txs = Transaction.objects.filter(
+        movements = (
+            Transaction.objects.filter(user=user, account_id__in=account_ids)
+            .aggregate(
+                total_income=Coalesce(
+                    Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Value(0), output_field=DecimalField(),
+                ),
+                total_expense=Coalesce(
+                    Sum(Case(When(transaction_type="expense", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Value(0), output_field=DecimalField(),
+                ),
+                total_transfer_out=Coalesce(
+                    Sum(Case(When(transaction_type="transfer", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Value(0), output_field=DecimalField(),
+                ),
+            )
+        )
+        transfer_in = Transaction.objects.filter(
+            user=user, transaction_type="transfer", transfer_account_id__in=account_ids
+        ).aggregate(
+            total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
+        )["total"]
+
+        total_balance = (
+            initial_sum
+            + float(movements["total_income"])
+            - float(movements["total_expense"])
+            - float(movements["total_transfer_out"])
+            + float(transfer_in)
+        )
+
+        # ── Mês corrente ─────────────────────────────────────────────────────
+        month_agg = Transaction.objects.filter(
             user=user, date__year=year, date__month=month
+        ).aggregate(
+            month_income=Coalesce(
+                Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                Value(0), output_field=DecimalField(),
+            ),
+            month_expense=Coalesce(
+                Sum(Case(When(transaction_type="expense", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                Value(0), output_field=DecimalField(),
+            ),
         )
-        month_income = float(
-            month_txs.filter(transaction_type="income").aggregate(t=Sum("amount"))["t"] or 0
-        )
-        month_expense = float(
-            month_txs.filter(transaction_type="expense").aggregate(t=Sum("amount"))["t"] or 0
-        )
+        month_income = float(month_agg["month_income"])
+        month_expense = float(month_agg["month_expense"])
 
-        # Total a receber
-        total_receivable = float(
-            Transaction.objects.filter(
-                user=user, is_receivable=True, receipt_status__in=["pending", "partial"]
-            ).aggregate(t=Sum("amount") - Sum("received_amount"))["t"] or 0
+        # ── Total a receber (corrigido) ───────────────────────────────────────
+        receivable_agg = Transaction.objects.filter(
+            user=user, is_receivable=True, receipt_status__in=["pending", "partial"]
+        ).aggregate(
+            total_amount=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()),
+            total_received=Coalesce(Sum("received_amount"), Value(0), output_field=DecimalField()),
         )
+        total_receivable = float(receivable_agg["total_amount"]) - float(receivable_agg["total_received"])
 
-        # Despesas por categoria
-        from django.db.models import F
+        # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
-            month_txs.filter(transaction_type="expense", category__isnull=False)
+            Transaction.objects.filter(
+                user=user, date__year=year, date__month=month,
+                transaction_type="expense", category__isnull=False,
+            )
             .values("category__name", "category__color")
             .annotate(total=Sum("amount"))
             .order_by("-total")
@@ -310,23 +356,50 @@ class TransactionQuery:
             for r in cat_data
         ]
 
-        # Histórico dos últimos 6 meses
-        history = []
+        # ── Histórico dos últimos 6 meses: 1 query com GROUP BY ───────────────
+        # Determina os 6 meses alvo
+        target_months = []
         for i in range(5, -1, -1):
             m = month - i
             y = year
-            while m <= 0:
+            if m <= 0:
                 m += 12
                 y -= 1
+            target_months.append((y, m))
+
+        first_y, first_m = target_months[0]
+        last_y, last_m = target_months[-1]
+        first_date = date(first_y, first_m, 1)
+        last_date = date(last_y, last_m, 28)  # inclui até final do mês
+
+        raw = (
+            Transaction.objects.filter(
+                user=user,
+                date__gte=first_date,
+                date__lte=date(last_y, last_m, 31) if last_m in (1,3,5,7,8,10,12) else date(last_y, last_m, 30),
+                transaction_type__in=["income", "expense"],
+            )
+            .annotate(y=ExtractYear("date"), m=ExtractMonth("date"))
+            .values("y", "m")
+            .annotate(
+                income=Coalesce(
+                    Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Value(0), output_field=DecimalField(),
+                ),
+                expense=Coalesce(
+                    Sum(Case(When(transaction_type="expense", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Value(0), output_field=DecimalField(),
+                ),
+            )
+        )
+        raw_map = {(r["y"], r["m"]): r for r in raw}
+
+        history = []
+        for y, m in target_months:
             label = date(y, m, 1).strftime("%b/%y")
-            inc = float(
-                Transaction.objects.filter(user=user, date__year=y, date__month=m, transaction_type="income")
-                .aggregate(t=Sum("amount"))["t"] or 0
-            )
-            exp = float(
-                Transaction.objects.filter(user=user, date__year=y, date__month=m, transaction_type="expense")
-                .aggregate(t=Sum("amount"))["t"] or 0
-            )
+            row = raw_map.get((y, m))
+            inc = float(row["income"]) if row else 0.0
+            exp = float(row["expense"]) if row else 0.0
             history.append(MonthBalance(month=label, income=inc, expense=exp, balance=inc - exp))
 
         return DashboardSummary(
@@ -349,7 +422,6 @@ class TransactionQuery:
         user = require_auth(info)
         events: list[CalendarEvent] = []
 
-        # Lançamentos do mês
         txs = Transaction.objects.filter(
             user=user,
             date__year=year,
@@ -368,7 +440,6 @@ class TransactionQuery:
                 color=color,
             ))
 
-        # Vencimentos de fatura
         invoices = Invoice.objects.filter(
             credit_card__user=user,
             due_date__year=year,
@@ -384,7 +455,6 @@ class TransactionQuery:
                 color="#f97316",
             ))
 
-        # Recorrências do mês
         recurrences = Recurrence.objects.filter(user=user, is_active=True)
         for rec in recurrences:
             exec_date = rec.get_execution_date(year, month)
@@ -416,6 +486,18 @@ class TransactionMutation:
 
         user = require_auth(info)
 
+        # ── Validação de input ─────────────────────────────────────────────
+        if input.amount <= 0:
+            raise ValueError("Valor deve ser positivo.")
+        if not (1 <= input.total_installments <= 48):
+            raise ValueError("Parcelas devem ser entre 1 e 48.")
+        if input.transaction_type not in VALID_TRANSACTION_TYPES:
+            raise ValueError(f"Tipo inválido. Use: {', '.join(VALID_TRANSACTION_TYPES)}")
+        if input.payment_method not in VALID_PAYMENT_METHODS:
+            raise ValueError(f"Meio de pagamento inválido. Use: {', '.join(VALID_PAYMENT_METHODS)}")
+        if input.description.strip() == "":
+            raise ValueError("Descrição não pode ser vazia.")
+
         account = None
         if input.account_id:
             account = Account.objects.filter(id=input.account_id, user=user).first()
@@ -445,7 +527,6 @@ class TransactionMutation:
 
             first_month = get_first_invoice_month(credit_card, input.date)
 
-            # Cria transação pai (representando o total)
             parent = Transaction.objects.create(
                 user=user,
                 description=input.description,
@@ -546,6 +627,9 @@ class TransactionMutation:
         t = Transaction.objects.filter(id=input.id, user=user).first()
         if not t:
             raise Exception("Lançamento não encontrado.")
+
+        if input.amount is not None and input.amount <= 0:
+            raise ValueError("Valor deve ser positivo.")
 
         if input.description is not None:
             t.description = input.description

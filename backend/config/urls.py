@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path
 from django.views.decorators.csrf import csrf_exempt
 from strawberry.django.views import GraphQLView
@@ -15,7 +16,12 @@ class AuraCashGraphQLView(GraphQLView):
         }
 
 
+def health(request):
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("graphql/", csrf_exempt(AuraCashGraphQLView.as_view(schema=schema))),
+    path("health/", health),
 ]

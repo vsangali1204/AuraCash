@@ -2,6 +2,7 @@ import { ApolloProvider } from "@apollo/client";
 import { Toaster } from "react-hot-toast";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { BrowserRouter } from "react-router-dom";
+import { useEffect } from "react";
 import { apolloClient } from "@/graphql/client";
 import { useAuthStore } from "@/store/authStore";
 import { MainLayout } from "@/components/Layout/MainLayout";
@@ -19,8 +20,25 @@ import { CalendarPage } from "@/pages/CalendarPage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
+const HEALTH_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/health/`
+  : "/health/";
+
+const KEEP_ALIVE_MS = 10 * 60 * 1000; // 10 minutos
+
+function useKeepAlive(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const ping = () => fetch(HEALTH_URL, { method: "GET" }).catch(() => null);
+    ping(); // ping imediato ao autenticar
+    const id = setInterval(ping, KEEP_ALIVE_MS);
+    return () => clearInterval(id);
+  }, [enabled]);
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
+  useKeepAlive(isAuthenticated);
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
