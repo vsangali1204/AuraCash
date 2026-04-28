@@ -36,7 +36,7 @@ const ACCOUNT_TYPE_OPTIONS = Object.entries(ACCOUNT_TYPE_LABELS).map(([value, la
 }));
 
 const COLOR_OPTIONS = [
-  "#0ea5e9", "#0ea5e9", "#ec4899", "#ef4444",
+  "#0ea5e9", "#38bdf8", "#ec4899", "#ef4444",
   "#f97316", "#eab308", "#22c55e", "#06b6d4",
 ];
 

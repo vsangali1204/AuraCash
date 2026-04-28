@@ -6,10 +6,10 @@ export default {
     extend: {
       colors: {
         surface: {
-          DEFAULT: "#0f0f13",
-          card: "#1a1a24",
-          border: "#2a2a3a",
-          hover: "#22222e",
+          DEFAULT: "#0f0f0f",
+          card: "#1a1a1a",
+          border: "#2a2a2a",
+          hover: "#222222",
         },
       },
       fontFamily: {

@@ -38,7 +38,7 @@ const CATEGORY_TYPE_OPTIONS = [
 const COLOR_OPTIONS = [
   "#0ea5e9", "#0ea5e9", "#ec4899", "#ef4444",
   "#f97316", "#eab308", "#22c55e", "#06b6d4",
-  "#3b82f6", "#14b8a6", "#84cc16", "#a855f7",
+  "#3b82f6", "#14b8a6", "#84cc16", "#f43f5e",
 ];
 
 const DEFAULT_CATEGORIES = [
