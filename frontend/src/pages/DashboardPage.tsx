@@ -1,10 +1,11 @@
 import { useQuery } from "@apollo/client";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -16,7 +17,19 @@ import { RECEIVABLE_SUMMARY_QUERY } from "@/graphql/queries/receivables";
 import { formatCurrency, formatDate, formatMonthYear, TRANSACTION_TYPE_LABELS } from "@/lib/utils";
 import type { Account, DashboardSummary, Recurrence, ReceivableSummary, Transaction } from "@/types";
 
-const now = new Date();
+const DASHBOARD_MONTH_KEY = "auracash-dashboard-month";
+
+function getInitialMonth() {
+  try {
+    const saved = localStorage.getItem(DASHBOARD_MONTH_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.year && parsed.month) return parsed as { year: number; month: number };
+    }
+  } catch {}
+  const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
 
 const TOOLTIP_STYLE = {
   contentStyle: { background: "#13131f", border: "1px solid #2a2a3a", borderRadius: "8px", fontSize: "12px" },
@@ -25,9 +38,26 @@ const TOOLTIP_STYLE = {
 };
 
 export function DashboardPage() {
+  const [navMonth, setNavMonth] = useState(getInitialMonth);
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_MONTH_KEY, JSON.stringify(navMonth));
+  }, [navMonth]);
+
+  function prevMonth() {
+    setNavMonth(({ year, month }) =>
+      month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+    );
+  }
+  function nextMonth() {
+    setNavMonth(({ year, month }) =>
+      month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
+    );
+  }
+
   const { data: summaryData, loading: summaryLoading } = useQuery<{ dashboardSummary: DashboardSummary }>(
     DASHBOARD_SUMMARY_QUERY,
-    { variables: { year: now.getFullYear(), month: now.getMonth() + 1 } }
+    { variables: { year: navMonth.year, month: navMonth.month } }
   );
 
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
@@ -46,15 +76,32 @@ export function DashboardPage() {
   const receivables = receivablesData?.receivableSummary ?? [];
   const totalReceivable = receivables.reduce((s, r) => s + r.pendingAmount, 0);
 
-  const monthLabel = now.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+  const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
+    .toLocaleString("pt-BR", { month: "long", year: "numeric" });
   const balanceHistory = summary?.balanceHistory ?? [];
   const expenseByCategory = summary?.expenseByCategory ?? [];
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-        <p className="text-sm text-gray-500 capitalize">{monthLabel}</p>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={prevMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-[140px] text-center text-sm font-medium text-gray-300 capitalize">
+            {monthLabel}
+          </span>
+          <button
+            onClick={nextMonth}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
 
 
@@ -78,7 +125,6 @@ export function DashboardPage() {
             <Calculator size={15} />
           </div>
           <h2 className="text-sm font-semibold text-white">Projeção do Mês</h2>
-          <span className="ml-auto text-xs text-gray-500 capitalize">{monthLabel}</span>
         </div>
         {summaryLoading ? (
           <div className="h-24 animate-pulse rounded bg-surface-border" />
