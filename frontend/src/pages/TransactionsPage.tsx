@@ -586,7 +586,7 @@ export function TransactionsPage() {
           <Input label="Observação" placeholder="Nota adicional (opcional)" {...register("notes")} />
 
           <div className="flex justify-end gap-3 pt-1">
-            <Button type="button" variant="secondary" onClick={closeDrawer}>Cancelar</Button>
+            <Button type="button" variant="secondary" onClick={closeModal}>Cancelar</Button>
             <Button type="submit" loading={creating || updating}>
               {editing ? "Salvar alterações" : "Criar lançamento"}
             </Button>
