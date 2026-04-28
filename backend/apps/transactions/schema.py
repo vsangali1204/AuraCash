@@ -332,19 +332,19 @@ class TransactionQuery:
         month_expense = float(month_agg["month_expense"])
 
         # ── Total a receber (todos pendentes) ────────────────────────────────
-        receivable_agg = Transaction.objects.filter(
+        # exclude: transações-pai de parcelamentos evitam dupla contagem com as parcelas filhas
+        receivable_qs = Transaction.objects.filter(
             user=user, is_receivable=True, receipt_status__in=["pending", "partial"]
-        ).aggregate(
+        ).exclude(parent_transaction__isnull=True, total_installments__gt=1)
+
+        receivable_agg = receivable_qs.aggregate(
             total_amount=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()),
             total_received=Coalesce(Sum("received_amount"), Value(0), output_field=DecimalField()),
         )
         total_receivable = float(receivable_agg["total_amount"]) - float(receivable_agg["total_received"])
 
         # ── A receber com previsão para este mês ─────────────────────────────
-        month_recv_agg = Transaction.objects.filter(
-            user=user,
-            is_receivable=True,
-            receipt_status__in=["pending", "partial"],
+        month_recv_agg = receivable_qs.filter(
             competence_date__year=year,
             competence_date__month=month,
         ).aggregate(
