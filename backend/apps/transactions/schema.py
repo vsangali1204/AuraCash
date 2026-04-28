@@ -355,14 +355,27 @@ class TransactionQuery:
 
         # ── Projeção de caixa: receitas/despesas futuras e faturas pendentes ──
         from apps.credit_cards.models import Invoice as InvoiceModel
+        from apps.recurrences.models import Recurrence
         today = date.today()
 
-        # Receitas ainda a entrar este mês (date > hoje)
-        future_income_agg = Transaction.objects.filter(
+        # Receitas ainda a entrar este mês: transações já lançadas com date > hoje
+        future_income_tx = float(Transaction.objects.filter(
             user=user, transaction_type="income",
             date__year=year, date__month=month, date__gt=today,
-        ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))
-        future_income_amount = float(future_income_agg["total"])
+        ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"])
+
+        # + recorrências de receita que ainda não geraram transação neste mês
+        rec_income = Decimal("0")
+        for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type="income"):
+            exec_date = rec.get_execution_date(year, month)
+            if exec_date and exec_date > today:
+                already = Transaction.objects.filter(
+                    recurrence=rec, date__year=year, date__month=month
+                ).exists()
+                if not already:
+                    rec_income += rec.amount
+
+        future_income_amount = future_income_tx + float(rec_income)
 
         # Faturas com vencimento este mês ainda não pagas
         pending_invoices_qs = InvoiceModel.objects.filter(
@@ -381,14 +394,28 @@ class TransactionQuery:
 
         pending_invoices_amount = max(0.0, float(inv_tx_total) - float(inv_paid_total))
 
-        # Despesas futuras não-cartão este mês (boletos, PIX, débito agendados)
-        future_expenses_agg = Transaction.objects.filter(
+        # Despesas futuras não-cartão: transações já lançadas com date > hoje
+        future_expenses_tx = float(Transaction.objects.filter(
             user=user, transaction_type="expense",
             date__year=year, date__month=month, date__gt=today,
         ).exclude(payment_method="credit").aggregate(
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
-        )
-        future_expenses_amount = float(future_expenses_agg["total"])
+        )["total"])
+
+        # + recorrências de despesa não-cartão que ainda não geraram transação
+        rec_expenses = Decimal("0")
+        for rec in Recurrence.objects.filter(
+            user=user, is_active=True, recurrence_type="expense"
+        ).exclude(payment_method="credit"):
+            exec_date = rec.get_execution_date(year, month)
+            if exec_date and exec_date > today:
+                already = Transaction.objects.filter(
+                    recurrence=rec, date__year=year, date__month=month
+                ).exists()
+                if not already:
+                    rec_expenses += rec.amount
+
+        future_expenses_amount = future_expenses_tx + float(rec_expenses)
 
         # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
