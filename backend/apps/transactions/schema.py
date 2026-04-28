@@ -138,8 +138,11 @@ class DashboardSummary:
     month_expense: float
     month_net: float
     total_receivable: float
-    month_receivable: float   # a receber com previsão para este mês
-    projected_balance: float  # month_income + month_receivable - month_expense
+    month_receivable: float        # a receber com previsão para este mês
+    future_income_amount: float    # receitas ainda a entrar este mês (date > hoje)
+    pending_invoices_amount: float # faturas com vencimento este mês, ainda não pagas
+    future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
+    projected_balance: float       # total_balance + future_income + receivable - invoices - future_expenses
     expense_by_category: list[CategoryExpense]
     balance_history: list[MonthBalance]
 
@@ -350,6 +353,43 @@ class TransactionQuery:
         )
         month_receivable = float(month_recv_agg["total_amount"]) - float(month_recv_agg["total_received"])
 
+        # ── Projeção de caixa: receitas/despesas futuras e faturas pendentes ──
+        from apps.credit_cards.models import Invoice as InvoiceModel
+        today = date.today()
+
+        # Receitas ainda a entrar este mês (date > hoje)
+        future_income_agg = Transaction.objects.filter(
+            user=user, transaction_type="income",
+            date__year=year, date__month=month, date__gt=today,
+        ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))
+        future_income_amount = float(future_income_agg["total"])
+
+        # Faturas com vencimento este mês ainda não pagas
+        pending_invoices_qs = InvoiceModel.objects.filter(
+            credit_card__user=user,
+            due_date__year=year,
+            due_date__month=month,
+        ).exclude(status=InvoiceModel.Status.PAID)
+
+        inv_tx_total = Transaction.objects.filter(
+            user=user, invoice__in=pending_invoices_qs,
+        ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"]
+
+        inv_paid_total = pending_invoices_qs.aggregate(
+            total=Coalesce(Sum("paid_amount"), Value(0), output_field=DecimalField())
+        )["total"]
+
+        pending_invoices_amount = max(0.0, float(inv_tx_total) - float(inv_paid_total))
+
+        # Despesas futuras não-cartão este mês (boletos, PIX, débito agendados)
+        future_expenses_agg = Transaction.objects.filter(
+            user=user, transaction_type="expense",
+            date__year=year, date__month=month, date__gt=today,
+        ).exclude(payment_method="credit").aggregate(
+            total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
+        )
+        future_expenses_amount = float(future_expenses_agg["total"])
+
         # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
             Transaction.objects.filter(
@@ -424,7 +464,10 @@ class TransactionQuery:
             month_net=month_income - month_expense,
             total_receivable=total_receivable,
             month_receivable=month_receivable,
-            projected_balance=month_income + month_receivable - month_expense,
+            future_income_amount=future_income_amount,
+            pending_invoices_amount=pending_invoices_amount,
+            future_expenses_amount=future_expenses_amount,
+            projected_balance=total_balance + future_income_amount + month_receivable - pending_invoices_amount - future_expenses_amount,
             expense_by_category=expense_by_category,
             balance_history=history,
         )

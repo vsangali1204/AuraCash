@@ -71,6 +71,9 @@ export const DASHBOARD_SUMMARY_QUERY = gql`
       monthNet
       totalReceivable
       monthReceivable
+      futureIncomeAmount
+      pendingInvoicesAmount
+      futureExpensesAmount
       projectedBalance
       expenseByCategory {
         categoryName

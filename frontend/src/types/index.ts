@@ -126,6 +126,9 @@ export interface DashboardSummary {
   monthNet: number;
   totalReceivable: number;
   monthReceivable: number;
+  futureIncomeAmount: number;
+  pendingInvoicesAmount: number;
+  futureExpensesAmount: number;
   projectedBalance: number;
   expenseByCategory: { categoryName: string; categoryColor: string; total: number; percentage: number }[];
   balanceHistory: { month: string; income: number; expense: number; balance: number }[];

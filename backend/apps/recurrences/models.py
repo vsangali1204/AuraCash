@@ -71,13 +71,13 @@ class Recurrence(models.Model):
         count = 0
         for d in range(1, calendar.monthrange(year, month)[1] + 1):
             dt = date(year, month, d)
-            if dt.weekday() < 5:  # segunda a sexta
+            if dt.weekday() < 6:  # segunda a sábado (domingo=6 é ignorado)
                 count += 1
                 if count == n:
                     return dt
         # Se N > dias úteis do mês, retorna o último dia útil
         for d in range(calendar.monthrange(year, month)[1], 0, -1):
             dt = date(year, month, d)
-            if dt.weekday() < 5:
+            if dt.weekday() < 6:
                 return dt
         return None

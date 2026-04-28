@@ -81,24 +81,23 @@ export function DashboardPage() {
           <span className="ml-auto text-xs text-gray-500 capitalize">{monthLabel}</span>
         </div>
         {summaryLoading ? (
-          <div className="h-20 animate-pulse rounded bg-surface-border" />
+          <div className="h-24 animate-pulse rounded bg-surface-border" />
         ) : (
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
-            {/* Income side */}
+            {/* Entradas */}
             <div className="flex-1 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-3">Entradas previstas</p>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Entradas confirmadas</span>
-                <span className="text-sm font-medium text-emerald-400">{formatCurrency(summary?.monthIncome ?? 0)}</span>
+                <span className="text-xs text-gray-500">Saldo atual em contas</span>
+                <span className="text-sm font-medium text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">A receber este mês</span>
-                <span className="text-sm font-medium text-amber-400">{formatCurrency(summary?.monthReceivable ?? 0)}</span>
+                <span className="text-xs text-gray-500">Receitas a entrar este mês</span>
+                <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.futureIncomeAmount ?? 0)}</span>
               </div>
-              <div className="flex items-center justify-between border-t border-surface-border pt-2">
-                <span className="text-xs font-semibold text-gray-300">Total de entradas</span>
-                <span className="text-sm font-bold text-emerald-300">
-                  {formatCurrency((summary?.monthIncome ?? 0) + (summary?.monthReceivable ?? 0))}
-                </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">A receber (cobranças)</span>
+                <span className="text-sm font-medium text-amber-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
               </div>
             </div>
 
@@ -106,14 +105,19 @@ export function DashboardPage() {
             <div className="hidden sm:block w-px bg-surface-border mx-6" />
             <div className="block sm:hidden h-px bg-surface-border" />
 
-            {/* Expense + result side */}
+            {/* Saídas + resultado */}
             <div className="flex-1 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-3">Saídas pendentes</p>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Despesas do mês</span>
-                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.monthExpense ?? 0)}</span>
+                <span className="text-xs text-gray-500">Faturas a vencer este mês</span>
+                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.pendingInvoicesAmount ?? 0)}</span>
               </div>
-              <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-auto">
-                <span className="text-xs font-semibold text-gray-300">Saldo projetado</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Boletos / débitos futuros</span>
+                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-1">
+                <span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span>
                 <span className={`text-base font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-sky-300" : "text-red-400"}`}>
                   {formatCurrency(summary?.projectedBalance ?? 0)}
                 </span>
