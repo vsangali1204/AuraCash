@@ -140,7 +140,7 @@ export function CalendarPage() {
               { color: "#10b981", label: "Receita" },
               { color: "#ef4444", label: "Despesa" },
               { color: "#f97316", label: "Venc. fatura" },
-              { color: "#8b5cf6", label: "Recorrência" },
+              { color: "#0ea5e9", label: "Recorrência" },
               { color: "#3b82f6", label: "Transferência" },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-1.5">

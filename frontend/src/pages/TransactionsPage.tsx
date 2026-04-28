@@ -406,7 +406,7 @@ export function TransactionsPage() {
                       {/* Ícone */}
                       <div
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg mt-0.5"
-                        style={{ backgroundColor: (t.category?.color ?? "#6366f1") + "22", color: t.category?.color ?? "#6366f1" }}
+                        style={{ backgroundColor: (t.category?.color ?? "#0ea5e9") + "22", color: t.category?.color ?? "#0ea5e9" }}
                       >
                         {t.creditCard ? <CreditCardIcon size={14} /> : t.recurrence ? <RefreshCw size={14} /> : <ArrowLeftRight size={14} />}
                       </div>

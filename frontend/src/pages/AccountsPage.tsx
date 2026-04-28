@@ -36,7 +36,7 @@ const ACCOUNT_TYPE_OPTIONS = Object.entries(ACCOUNT_TYPE_LABELS).map(([value, la
 }));
 
 const COLOR_OPTIONS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
+  "#0ea5e9", "#0ea5e9", "#ec4899", "#ef4444",
   "#f97316", "#eab308", "#22c55e", "#06b6d4",
 ];
 
@@ -57,7 +57,7 @@ export function AccountsPage() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { accountType: "checking", color: "#6366f1", initialBalance: 0 },
+    defaultValues: { accountType: "checking", color: "#0ea5e9", initialBalance: 0 },
   });
 
   const selectedColor = watch("color");
@@ -82,7 +82,7 @@ export function AccountsPage() {
 
   function openCreate() {
     setEditing(null);
-    reset({ accountType: "checking", color: "#6366f1", initialBalance: 0, name: "", bank: "" });
+    reset({ accountType: "checking", color: "#0ea5e9", initialBalance: 0, name: "", bank: "" });
     setModalOpen(true);
   }
 

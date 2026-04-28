@@ -36,7 +36,7 @@ const CATEGORY_TYPE_OPTIONS = [
 ];
 
 const COLOR_OPTIONS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
+  "#0ea5e9", "#0ea5e9", "#ec4899", "#ef4444",
   "#f97316", "#eab308", "#22c55e", "#06b6d4",
   "#3b82f6", "#14b8a6", "#84cc16", "#a855f7",
 ];
@@ -44,7 +44,7 @@ const COLOR_OPTIONS = [
 const DEFAULT_CATEGORIES = [
   { name: "Alimentação", categoryType: "expense", color: "#f97316" },
   { name: "Transporte", categoryType: "expense", color: "#3b82f6" },
-  { name: "Moradia", categoryType: "expense", color: "#8b5cf6" },
+  { name: "Moradia", categoryType: "expense", color: "#0ea5e9" },
   { name: "Saúde", categoryType: "expense", color: "#ef4444" },
   { name: "Educação", categoryType: "expense", color: "#eab308" },
   { name: "Lazer", categoryType: "expense", color: "#22c55e" },
@@ -76,7 +76,7 @@ export function CategoriesPage() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { categoryType: "expense", color: "#6366f1" },
+    defaultValues: { categoryType: "expense", color: "#0ea5e9" },
   });
 
   const selectedColor = watch("color");
@@ -101,7 +101,7 @@ export function CategoriesPage() {
 
   function openCreate() {
     setEditing(null);
-    reset({ categoryType: "expense", color: "#6366f1", name: "" });
+    reset({ categoryType: "expense", color: "#0ea5e9", name: "" });
     setModalOpen(true);
   }
 

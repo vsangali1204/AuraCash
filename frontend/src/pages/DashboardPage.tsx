@@ -229,7 +229,7 @@ export function DashboardPage() {
                 <div key={t.id} className="flex items-center justify-between rounded-lg p-2.5 hover:bg-surface transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: (t.category?.color ?? "#6366f1") + "22", color: t.category?.color ?? "#6366f1" }}>
+                      style={{ backgroundColor: (t.category?.color ?? "#0ea5e9") + "22", color: t.category?.color ?? "#0ea5e9" }}>
                       <ArrowLeftRight size={13} />
                     </div>
                     <div>

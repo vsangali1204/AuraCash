@@ -120,7 +120,7 @@ export function ReportsPage() {
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line type="monotone" dataKey="income" name="Receitas" stroke="#10b981" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="expense" name="Despesas" stroke="#ef4444" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="balance" name="Saldo" stroke="#8b5cf6" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="balance" name="Saldo" stroke="#0ea5e9" strokeWidth={2} dot={false} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -273,7 +273,7 @@ export function ReportsPage() {
                   <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
                   <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => formatCurrency(v)} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="totalAmount" name="Total fatura" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="totalAmount" name="Total fatura" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="paidAmount" name="Pago" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
