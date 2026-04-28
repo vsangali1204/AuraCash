@@ -4,7 +4,7 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -70,6 +70,58 @@ export function DashboardPage() {
           color="amber"
         />
       </div>
+
+      {/* Month projection */}
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+            <Calculator size={15} />
+          </div>
+          <h2 className="text-sm font-semibold text-white">Projeção do Mês</h2>
+          <span className="ml-auto text-xs text-gray-500 capitalize">{monthLabel}</span>
+        </div>
+        {summaryLoading ? (
+          <div className="h-20 animate-pulse rounded bg-surface-border" />
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
+            {/* Income side */}
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Entradas confirmadas</span>
+                <span className="text-sm font-medium text-emerald-400">{formatCurrency(summary?.monthIncome ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">A receber este mês</span>
+                <span className="text-sm font-medium text-amber-400">{formatCurrency(summary?.monthReceivable ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-surface-border pt-2">
+                <span className="text-xs font-semibold text-gray-300">Total de entradas</span>
+                <span className="text-sm font-bold text-emerald-300">
+                  {formatCurrency((summary?.monthIncome ?? 0) + (summary?.monthReceivable ?? 0))}
+                </span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden sm:block w-px bg-surface-border mx-6" />
+            <div className="block sm:hidden h-px bg-surface-border" />
+
+            {/* Expense + result side */}
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Despesas do mês</span>
+                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.monthExpense ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-auto">
+                <span className="text-xs font-semibold text-gray-300">Saldo projetado</span>
+                <span className={`text-base font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-violet-300" : "text-red-400"}`}>
+                  {formatCurrency(summary?.projectedBalance ?? 0)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

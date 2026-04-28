@@ -13,8 +13,8 @@ export const RECEIVABLE_SUMMARY_QUERY = gql`
 `;
 
 export const RECEIVABLE_TRANSACTIONS_QUERY = gql`
-  query ReceivableTransactions($debtorName: String, $status: String) {
-    receivableTransactions(debtorName: $debtorName, status: $status) {
+  query ReceivableTransactions($debtorName: String, $status: String, $period: String) {
+    receivableTransactions(debtorName: $debtorName, status: $status, period: $period) {
       id
       description
       amount
@@ -75,6 +75,12 @@ export const CREATE_RECEIPT_MUTATION = gql`
       receiptDate
       destinationAccountName
     }
+  }
+`;
+
+export const BULK_RECEIVE_MUTATION = gql`
+  mutation BulkReceive($input: BulkReceiveInput!) {
+    bulkReceive(input: $input)
   }
 `;
 

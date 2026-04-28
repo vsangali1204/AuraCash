@@ -70,6 +70,8 @@ export const DASHBOARD_SUMMARY_QUERY = gql`
       monthExpense
       monthNet
       totalReceivable
+      monthReceivable
+      projectedBalance
       expenseByCategory {
         categoryName
         categoryColor

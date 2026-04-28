@@ -56,6 +56,14 @@ class CreateReceiptInput:
     notes: Optional[str] = None
 
 
+@strawberry.input
+class BulkReceiveInput:
+    transaction_ids: list[strawberry.ID]
+    receipt_date: date
+    destination_account_id: strawberry.ID
+    notes: Optional[str] = None
+
+
 @strawberry.type
 class ReceivableQuery:
     @strawberry.field
@@ -66,7 +74,6 @@ class ReceivableQuery:
 
         user = require_auth(info)
 
-        # Exclui transações-pai das parcelas (parent_transaction=NULL e total_installments>1)
         base_qs = Transaction.objects.filter(
             user=user,
             is_receivable=True,
@@ -95,18 +102,34 @@ class ReceivableQuery:
         info: strawberry.types.Info,
         debtor_name: Optional[str] = None,
         status: Optional[str] = None,
+        period: Optional[str] = None,  # overdue | this_month | next_month | all
     ) -> list[TransactionType]:
         user = require_auth(info)
-        # Exclui transações-pai das parcelas (parent_transaction=NULL e total_installments>1)
+        today = date.today()
+
         qs = TransactionModel.objects.filter(
-            user=user, is_receivable=True
+            user=user,
+            is_receivable=True,
+            receipt_status__in=["pending", "partial"],
         ).exclude(parent_transaction__isnull=True, total_installments__gt=1).select_related(
             "account", "credit_card", "invoice", "category"
         ).order_by("competence_date", "date")
+
         if debtor_name:
             qs = qs.filter(debtor_name=debtor_name)
         if status:
             qs = qs.filter(receipt_status=status)
+
+        if period == "overdue":
+            qs = qs.filter(competence_date__lt=today)
+        elif period == "this_month":
+            qs = qs.filter(competence_date__year=today.year, competence_date__month=today.month)
+        elif period == "next_month":
+            if today.month == 12:
+                qs = qs.filter(competence_date__year=today.year + 1, competence_date__month=1)
+            else:
+                qs = qs.filter(competence_date__year=today.year, competence_date__month=today.month + 1)
+
         return [map_transaction(t) for t in qs]
 
     @strawberry.field
@@ -154,7 +177,6 @@ class ReceivableMutation:
             notes=input.notes,
         )
 
-        # Cria receita na conta destino
         TransactionModel.objects.create(
             user=user,
             description=f"Recebimento: {tx.description} ({tx.debtor_name})",
@@ -167,15 +189,62 @@ class ReceivableMutation:
             notes=input.notes,
         )
 
-        # Atualiza status do lançamento original
         tx.received_amount += amount
-        if tx.received_amount >= tx.amount:
-            tx.receipt_status = "received"
-        else:
-            tx.receipt_status = "partial"
+        tx.receipt_status = "received" if tx.received_amount >= tx.amount else "partial"
         tx.save()
 
         return map_receipt(receipt)
+
+    @strawberry.mutation
+    def bulk_receive(
+        self, info: strawberry.types.Info, input: BulkReceiveInput
+    ) -> int:
+        """Recebe o saldo pendente de múltiplas transações de uma vez. Retorna quantas foram processadas."""
+        from apps.accounts.models import Account
+
+        user = require_auth(info)
+
+        dest_account = Account.objects.filter(id=input.destination_account_id, user=user).first()
+        if not dest_account:
+            raise Exception("Conta destino não encontrada.")
+
+        count = 0
+        for tx_id in input.transaction_ids:
+            tx = TransactionModel.objects.filter(
+                id=tx_id, user=user, is_receivable=True
+            ).first()
+            if not tx or tx.receipt_status == "received":
+                continue
+
+            amount = tx.amount - tx.received_amount
+            if amount <= Decimal("0"):
+                continue
+
+            Receipt.objects.create(
+                transaction=tx,
+                amount_received=amount,
+                receipt_date=input.receipt_date,
+                destination_account=dest_account,
+                notes=input.notes,
+            )
+
+            TransactionModel.objects.create(
+                user=user,
+                description=f"Recebimento: {tx.description} ({tx.debtor_name})",
+                amount=amount,
+                transaction_type="income",
+                payment_method="pix",
+                date=input.receipt_date,
+                account=dest_account,
+                category=tx.category,
+            )
+
+            tx.received_amount += amount
+            tx.receipt_status = "received"
+            tx.save()
+            count += 1
+
+        return count
 
     @strawberry.mutation
     def delete_receipt(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
@@ -184,7 +253,6 @@ class ReceivableMutation:
         if not receipt:
             raise Exception("Recebimento não encontrado.")
 
-        # Reverte o received_amount na transaction
         tx = receipt.transaction
         tx.received_amount -= receipt.amount_received
         if tx.received_amount <= 0:

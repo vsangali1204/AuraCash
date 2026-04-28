@@ -138,6 +138,8 @@ class DashboardSummary:
     month_expense: float
     month_net: float
     total_receivable: float
+    month_receivable: float   # a receber com previsão para este mês
+    projected_balance: float  # month_income + month_receivable - month_expense
     expense_by_category: list[CategoryExpense]
     balance_history: list[MonthBalance]
 
@@ -326,7 +328,7 @@ class TransactionQuery:
         month_income = float(month_agg["month_income"])
         month_expense = float(month_agg["month_expense"])
 
-        # ── Total a receber (corrigido) ───────────────────────────────────────
+        # ── Total a receber (todos pendentes) ────────────────────────────────
         receivable_agg = Transaction.objects.filter(
             user=user, is_receivable=True, receipt_status__in=["pending", "partial"]
         ).aggregate(
@@ -334,6 +336,19 @@ class TransactionQuery:
             total_received=Coalesce(Sum("received_amount"), Value(0), output_field=DecimalField()),
         )
         total_receivable = float(receivable_agg["total_amount"]) - float(receivable_agg["total_received"])
+
+        # ── A receber com previsão para este mês ─────────────────────────────
+        month_recv_agg = Transaction.objects.filter(
+            user=user,
+            is_receivable=True,
+            receipt_status__in=["pending", "partial"],
+            competence_date__year=year,
+            competence_date__month=month,
+        ).aggregate(
+            total_amount=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()),
+            total_received=Coalesce(Sum("received_amount"), Value(0), output_field=DecimalField()),
+        )
+        month_receivable = float(month_recv_agg["total_amount"]) - float(month_recv_agg["total_received"])
 
         # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
@@ -408,6 +423,8 @@ class TransactionQuery:
             month_expense=month_expense,
             month_net=month_income - month_expense,
             total_receivable=total_receivable,
+            month_receivable=month_receivable,
+            projected_balance=month_income + month_receivable - month_expense,
             expense_by_category=expense_by_category,
             balance_history=history,
         )

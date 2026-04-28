@@ -125,6 +125,8 @@ export interface DashboardSummary {
   monthExpense: number;
   monthNet: number;
   totalReceivable: number;
+  monthReceivable: number;
+  projectedBalance: number;
   expenseByCategory: { categoryName: string; categoryColor: string; total: number; percentage: number }[];
   balanceHistory: { month: string; income: number; expense: number; balance: number }[];
 }
