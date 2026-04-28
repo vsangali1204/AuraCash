@@ -3,6 +3,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
+# Alias para evitar shadowing em @strawberry.input onde o campo se chama 'date'
+Date = date
+
 import strawberry
 from django.db.models import Case, DecimalField, F, Sum, Value, When
 from django.db.models.functions import Coalesce, ExtractMonth, ExtractYear
@@ -183,8 +186,8 @@ class UpdateTransactionInput:
     amount: Optional[float] = None
     transaction_type: Optional[str] = None
     payment_method: Optional[str] = None
-    date: Optional[date] = None
-    competence_date: Optional[date] = None
+    date: Optional[Date] = None
+    competence_date: Optional[Date] = None
     account_id: Optional[strawberry.ID] = None
     category_id: Optional[strawberry.ID] = None
     is_receivable: Optional[bool] = None
@@ -200,8 +203,8 @@ class TransactionFilters:
     category_id: Optional[strawberry.ID] = None
     transaction_type: Optional[str] = None
     payment_method: Optional[str] = None
-    date_from: Optional[date] = None
-    date_to: Optional[date] = None
+    date_from: Optional[Date] = None
+    date_to: Optional[Date] = None
     search: Optional[str] = None
     is_receivable: Optional[bool] = None
     receipt_status: Optional[str] = None
