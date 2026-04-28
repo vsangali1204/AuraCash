@@ -131,6 +131,7 @@ export interface DashboardSummary {
   futureExpensesAmount: number;
   projectedBalance: number;
   expenseByCategory: { categoryName: string; categoryColor: string; total: number; percentage: number }[];
+  incomeByCategory: { categoryName: string; categoryColor: string; total: number; percentage: number }[];
   balanceHistory: { month: string; income: number; expense: number; balance: number }[];
 }
 

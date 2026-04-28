@@ -81,6 +81,12 @@ export const DASHBOARD_SUMMARY_QUERY = gql`
         total
         percentage
       }
+      incomeByCategory {
+        categoryName
+        categoryColor
+        total
+        percentage
+      }
       balanceHistory {
         month
         income

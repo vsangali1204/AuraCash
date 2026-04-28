@@ -147,6 +147,7 @@ class DashboardSummary:
     future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
     projected_balance: float       # total_balance + future_income + receivable - invoices - future_expenses
     expense_by_category: list[CategoryExpense]
+    income_by_category: list[CategoryExpense]
     balance_history: list[MonthBalance]
 
 
@@ -441,6 +442,27 @@ class TransactionQuery:
             for r in cat_data
         ]
 
+        # ── Receitas por categoria ────────────────────────────────────────────
+        inc_cat_data = (
+            Transaction.objects.filter(
+                user=user, date__year=year, date__month=month,
+                transaction_type="income", category__isnull=False,
+            )
+            .values("category__name", "category__color")
+            .annotate(total=Sum("amount"))
+            .order_by("-total")
+        )
+        total_inc_cat = sum(float(r["total"]) for r in inc_cat_data) or 1
+        income_by_category = [
+            CategoryExpense(
+                category_name=r["category__name"],
+                category_color=r["category__color"],
+                total=float(r["total"]),
+                percentage=round(float(r["total"]) / total_inc_cat * 100, 1),
+            )
+            for r in inc_cat_data
+        ]
+
         # ── Histórico dos últimos 6 meses: 1 query com GROUP BY ───────────────
         # Determina os 6 meses alvo
         target_months = []
@@ -481,7 +503,7 @@ class TransactionQuery:
 
         history = []
         for y, m in target_months:
-            label = date(y, m, 1).strftime("%b/%y")
+            label = f"{y:04d}-{m:02d}"
             row = raw_map.get((y, m))
             inc = float(row["income"]) if row else 0.0
             exp = float(row["expense"]) if row else 0.0
@@ -499,6 +521,7 @@ class TransactionQuery:
             future_expenses_amount=future_expenses_amount,
             projected_balance=total_balance + future_income_amount + month_receivable - pending_invoices_amount - future_expenses_amount,
             expense_by_category=expense_by_category,
+            income_by_category=income_by_category,
             balance_history=history,
         )
 
