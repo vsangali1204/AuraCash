@@ -24,13 +24,13 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
           className={({ isActive }) =>
             cn(
               "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-              isActive ? "text-violet-400" : "text-gray-500 hover:text-gray-300"
+              isActive ? "text-sky-400" : "text-gray-500 hover:text-gray-300"
             )
           }
         >
           {({ isActive }) => (
             <>
-              <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg transition-colors", isActive && "bg-violet-600/15")}>
+              <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg transition-colors", isActive && "bg-sky-600/15")}>
                 <Icon size={18} />
               </span>
               {label}

@@ -60,7 +60,7 @@ export function DashboardPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <SummaryCard label="Saldo Total" value={summaryLoading ? null : (summary?.totalBalance ?? 0)} icon={<Wallet size={18} />} color="violet" />
+        <SummaryCard label="Saldo Total" value={summaryLoading ? null : (summary?.totalBalance ?? 0)} icon={<Wallet size={18} />} color="sky" />
         <SummaryCard label="Receitas do mês" value={summaryLoading ? null : (summary?.monthIncome ?? 0)} icon={<TrendingUp size={18} />} color="emerald" />
         <SummaryCard label="Despesas do mês" value={summaryLoading ? null : (summary?.monthExpense ?? 0)} icon={<TrendingDown size={18} />} color="red" />
         <SummaryCard
@@ -74,7 +74,7 @@ export function DashboardPage() {
       {/* Month projection */}
       <Card>
         <div className="flex items-center gap-2 mb-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/10 text-violet-400">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 text-sky-400">
             <Calculator size={15} />
           </div>
           <h2 className="text-sm font-semibold text-white">Projeção do Mês</h2>
@@ -114,7 +114,7 @@ export function DashboardPage() {
               </div>
               <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-auto">
                 <span className="text-xs font-semibold text-gray-300">Saldo projetado</span>
-                <span className={`text-base font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-violet-300" : "text-red-400"}`}>
+                <span className={`text-base font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-sky-300" : "text-red-400"}`}>
                   {formatCurrency(summary?.projectedBalance ?? 0)}
                 </span>
               </div>
@@ -342,10 +342,10 @@ function SummaryCard({
   label: string;
   value: number | null;
   icon: React.ReactNode;
-  color: "violet" | "emerald" | "red" | "amber";
+  color: "sky" | "emerald" | "red" | "amber";
 }) {
   const colorMap = {
-    violet: { bg: "bg-violet-500/10", text: "text-violet-400", value: "text-violet-300" },
+    sky: { bg: "bg-sky-500/10", text: "text-sky-400", value: "text-sky-300" },
     emerald: { bg: "bg-emerald-500/10", text: "text-emerald-400", value: "text-emerald-300" },
     red: { bg: "bg-red-500/10", text: "text-red-400", value: "text-red-300" },
     amber: { bg: "bg-amber-500/10", text: "text-amber-400", value: "text-amber-300" },

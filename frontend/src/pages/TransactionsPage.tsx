@@ -343,7 +343,7 @@ export function TransactionsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar lançamentos..."
-              className="h-9 w-full rounded-lg border border-surface-border bg-surface pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-violet-500 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-surface-border bg-surface pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-sky-500 focus:outline-none"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -358,7 +358,7 @@ export function TransactionsPage() {
                 onClick={() => setTypeFilter(tab.value)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   typeFilter === tab.value
-                    ? "bg-violet-600 text-white"
+                    ? "bg-sky-600 text-white"
                     : "bg-surface text-gray-400 hover:text-white border border-surface-border"
                 }`}
               >
@@ -401,7 +401,7 @@ export function TransactionsPage() {
                   {grouped[dateKey].map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card px-3 py-3 sm:px-4 hover:border-violet-500/30 transition-colors group"
+                      className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card px-3 py-3 sm:px-4 hover:border-sky-500/30 transition-colors group"
                     >
                       {/* Ícone */}
                       <div
@@ -566,7 +566,7 @@ export function TransactionsPage() {
                 <input
                   type="checkbox"
                   id="isReceivable"
-                  className="h-4 w-4 rounded border-surface-border bg-surface-card accent-violet-500"
+                  className="h-4 w-4 rounded border-surface-border bg-surface-card accent-sky-500"
                   {...register("isReceivable")}
                 />
                 <label htmlFor="isReceivable" className="text-sm text-gray-300">

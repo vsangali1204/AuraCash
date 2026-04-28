@@ -179,7 +179,7 @@ export function RecurrencesPage() {
       <div className="flex gap-2">
         {([["all", "Todas"], ["active", "Ativas"], ["inactive", "Pausadas"]] as const).map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${filter === v ? "bg-violet-600 text-white" : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"}`}>{l}</button>
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${filter === v ? "bg-sky-600 text-white" : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"}`}>{l}</button>
         ))}
       </div>
 
@@ -233,7 +233,7 @@ export function RecurrencesPage() {
 
               {rec.nextExecutionDate && rec.isActive && (
                 <p className="mt-2 text-xs text-gray-500">
-                  Próxima execução: <span className="text-violet-400">{formatDate(rec.nextExecutionDate)}</span>
+                  Próxima execução: <span className="text-sky-400">{formatDate(rec.nextExecutionDate)}</span>
                 </p>
               )}
             </div>
@@ -261,7 +261,7 @@ export function RecurrencesPage() {
             <Select label="Categoria" options={categoryOptions} {...register("categoryId")} />
           </div>
           <div className="flex items-center gap-2">
-            <input type="checkbox" id="useBusinessDay" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-violet-500" {...register("useBusinessDay")} />
+            <input type="checkbox" id="useBusinessDay" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-sky-500" {...register("useBusinessDay")} />
             <label htmlFor="useBusinessDay" className="text-sm text-gray-300">Usar N-ésimo dia útil do mês</label>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -161,7 +161,7 @@ export function CategoriesPage() {
             onClick={() => setFilter(tab.value)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               filter === tab.value
-                ? "bg-violet-600 text-white"
+                ? "bg-sky-600 text-white"
                 : "bg-surface-card text-gray-400 hover:text-white border border-surface-border"
             }`}
           >

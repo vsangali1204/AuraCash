@@ -62,7 +62,7 @@ export function ReportsPage() {
           <select
             value={month}
             onChange={(e) => setMonth(Number(e.target.value))}
-            className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+            className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
           >
             {MONTHS.map((m, i) => (
               <option key={i} value={i + 1}>{m}</option>
@@ -71,7 +71,7 @@ export function ReportsPage() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+            className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
           >
             {[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -90,7 +90,7 @@ export function ReportsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <StatCard label="Saldo Total" value={summary?.totalBalance ?? 0} icon={<FileText size={16} />} color="violet" />
+          <StatCard label="Saldo Total" value={summary?.totalBalance ?? 0} icon={<FileText size={16} />} color="sky" />
           <StatCard label="Receitas" value={summary?.monthIncome ?? 0} icon={<TrendingUp size={16} />} color="emerald" />
           <StatCard label="Despesas" value={summary?.monthExpense ?? 0} icon={<TrendingDown size={16} />} color="red" />
           <StatCard label="A Receber" value={totalReceivable} icon={<CreditCard size={16} />} color="amber" />
@@ -247,7 +247,7 @@ export function ReportsPage() {
             <select
               value={selectedCardId}
               onChange={(e) => setSelectedCardId(e.target.value)}
-              className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-sm text-white focus:border-violet-500 focus:outline-none"
+              className="rounded-lg border border-surface-border bg-surface px-3 py-1.5 text-sm text-white focus:border-sky-500 focus:outline-none"
             >
               <option value="">Selecione um cartão</option>
               {cards.map((c) => (
@@ -301,10 +301,10 @@ function StatCard({
   label: string;
   value: number;
   icon: React.ReactNode;
-  color: "violet" | "emerald" | "red" | "amber";
+  color: "sky" | "emerald" | "red" | "amber";
 }) {
   const colorMap = {
-    violet: { bg: "bg-violet-500/10", text: "text-violet-400", val: "text-violet-300" },
+    sky: { bg: "bg-sky-500/10", text: "text-sky-400", val: "text-sky-300" },
     emerald: { bg: "bg-emerald-500/10", text: "text-emerald-400", val: "text-emerald-300" },
     red: { bg: "bg-red-500/10", text: "text-red-400", val: "text-red-300" },
     amber: { bg: "bg-amber-500/10", text: "text-amber-400", val: "text-amber-300" },

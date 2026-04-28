@@ -75,7 +75,7 @@ function SidebarContent({
               cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-violet-600/15 text-violet-400"
+                  ? "bg-sky-600/15 text-sky-400"
                   : "text-gray-400 hover:bg-surface-hover hover:text-white"
               )
             }

@@ -41,7 +41,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
           onClick={() => setMenuOpen((v) => !v)}
           className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
         >
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600/20 text-violet-400">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-600/20 text-sky-400">
             <User size={14} />
           </div>
           <span className="hidden sm:block max-w-[120px] truncate">{user?.name}</span>

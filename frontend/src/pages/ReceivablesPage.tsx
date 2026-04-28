@@ -240,7 +240,7 @@ export function ReceivablesPage() {
       {/* Cards de resumo por período */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Próximo mês", value: nextMonthTotal, color: "violet", period: "next_month" as Period },
+          { label: "Próximo mês", value: nextMonthTotal, color: "sky", period: "next_month" as Period },
           { label: "Este mês",    value: thisMonthTotal, color: "blue",   period: "this_month" as Period },
           { label: "Atrasados",   value: overdueTotal,   color: "red",    period: "overdue" as Period },
           { label: "Total geral", value: totalPending,   color: "amber",  period: "all" as Period },
@@ -257,7 +257,7 @@ export function ReceivablesPage() {
             <p className="text-xs text-gray-500">{card.label}</p>
             <p className={`mt-1 text-base font-bold ${
               card.color === "red" && card.value > 0 ? "text-red-400"
-              : card.color === "violet" ? "text-violet-400"
+              : card.color === "sky" ? "text-sky-400"
               : card.color === "blue" ? "text-blue-400"
               : "text-amber-400"
             }`}>
@@ -275,7 +275,7 @@ export function ReceivablesPage() {
             onClick={() => changePeriod(tab.value)}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               period === tab.value
-                ? "bg-violet-600 text-white"
+                ? "bg-sky-600 text-white"
                 : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
             }`}
           >
@@ -286,7 +286,7 @@ export function ReceivablesPage() {
 
       {/* Barra de ação em lote */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3">
+        <div className="flex items-center justify-between rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
           <div>
             <p className="text-sm font-medium text-white">
               {selected.size} selecionado(s)
@@ -326,7 +326,7 @@ export function ReceivablesPage() {
           {/* Cabeçalho da lista */}
           <div className="flex items-center gap-3 border-b border-surface-border px-4 py-3">
             <button onClick={toggleAll} className="text-gray-400 hover:text-white transition-colors shrink-0">
-              {allSelected ? <CheckSquare size={18} className="text-violet-400" /> : <Square size={18} />}
+              {allSelected ? <CheckSquare size={18} className="text-sky-400" /> : <Square size={18} />}
             </button>
             <span className="text-xs font-medium text-gray-500 flex-1">
               {transactions.length} lançamento(s) · {formatCurrency(transactions.reduce((s, t) => s + t.remainingAmount, 0))} pendente
@@ -340,15 +340,15 @@ export function ReceivablesPage() {
               const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
 
               return (
-                <div key={tx.id} className={`transition-colors ${isSelected ? "bg-violet-500/5" : ""}`}>
+                <div key={tx.id} className={`transition-colors ${isSelected ? "bg-sky-500/5" : ""}`}>
                   <div className="flex items-start gap-3 px-4 py-3">
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleOne(tx.id)}
-                      className="mt-0.5 shrink-0 text-gray-400 hover:text-violet-400 transition-colors"
+                      className="mt-0.5 shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
                     >
                       {isSelected
-                        ? <CheckSquare size={18} className="text-violet-400" />
+                        ? <CheckSquare size={18} className="text-sky-400" />
                         : <Square size={18} />}
                     </button>
 
@@ -378,7 +378,7 @@ export function ReceivablesPage() {
                             <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
                             <span className="text-xs text-gray-500">{PAYMENT_METHOD_LABELS[tx.paymentMethod]}</span>
                             {tx.competenceDate && (
-                              <span className={`text-xs font-medium ${isOverdueItem ? "text-red-400" : "text-violet-400"}`}>
+                              <span className={`text-xs font-medium ${isOverdueItem ? "text-red-400" : "text-sky-400"}`}>
                                 {isOverdueItem ? "⚠ Venceu " : "Prev. "}
                                 {formatDate(tx.competenceDate)}
                               </span>
@@ -449,7 +449,7 @@ export function ReceivablesPage() {
                 <p className="text-gray-500">Devedor: <span className="text-white">{receivingTx.debtorName}</span></p>
               )}
               {receivingTx.competenceDate && (
-                <p className="text-gray-500">Previsão: <span className="text-violet-400">{formatDate(receivingTx.competenceDate)}</span></p>
+                <p className="text-gray-500">Previsão: <span className="text-sky-400">{formatDate(receivingTx.competenceDate)}</span></p>
               )}
               {receivingTx.receivedAmount > 0 && (
                 <p className="text-gray-500">Já recebido: <span className="text-emerald-400">{formatCurrency(receivingTx.receivedAmount)}</span></p>

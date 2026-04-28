@@ -170,8 +170,8 @@ export function CreditCardsPage() {
                 <div className="p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600/20">
-                        <CardIcon size={20} className="text-violet-400" />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-600/20">
+                        <CardIcon size={20} className="text-sky-400" />
                       </div>
                       <div>
                         <p className="font-semibold text-white">{card.name}</p>
@@ -203,7 +203,7 @@ export function CreditCardsPage() {
 
                   <div className="mt-3">
                     <div className="h-1.5 rounded-full bg-surface-border">
-                      <div className="h-1.5 rounded-full bg-violet-500 transition-all" style={{ width: `${usedPercent}%` }} />
+                      <div className="h-1.5 rounded-full bg-sky-500 transition-all" style={{ width: `${usedPercent}%` }} />
                     </div>
                     <p className="mt-1 text-xs text-gray-600">{usedPercent.toFixed(0)}% utilizado</p>
                   </div>

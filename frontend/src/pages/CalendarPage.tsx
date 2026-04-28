@@ -111,13 +111,13 @@ export function CalendarPage() {
                     onClick={() => setSelectedDate(isSelected ? null : dayStr)}
                     className={`relative flex min-h-[60px] flex-col items-center rounded-lg p-1.5 text-xs transition-colors ${
                       isSelected
-                        ? "bg-violet-600/20 border border-violet-500/50"
+                        ? "bg-sky-600/20 border border-sky-500/50"
                         : isToday
-                        ? "bg-violet-600/10 border border-violet-500/20"
+                        ? "bg-sky-600/10 border border-sky-500/20"
                         : "hover:bg-surface-hover"
                     }`}
                   >
-                    <span className={`font-medium ${isToday ? "text-violet-400" : "text-gray-300"}`}>{day}</span>
+                    <span className={`font-medium ${isToday ? "text-sky-400" : "text-gray-300"}`}>{day}</span>
                     {dayEvents.length > 0 && (
                       <div className="mt-1 flex flex-wrap justify-center gap-0.5">
                         {dayEvents.slice(0, 3).map((e, i) => (

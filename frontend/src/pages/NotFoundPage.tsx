@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 export function NotFoundPage() {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-24">
-      <p className="text-6xl font-bold text-violet-500">404</p>
+      <p className="text-6xl font-bold text-sky-500">404</p>
       <h1 className="text-xl font-semibold text-white">Página não encontrada</h1>
       <p className="text-sm text-gray-500">A página que você está procurando não existe.</p>
       <Link

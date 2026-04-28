@@ -242,7 +242,7 @@ function InvoiceRowInModal({
             <div
               className={cn(
                 "h-1 rounded-full transition-all",
-                invoice.status === "paid" ? "bg-emerald-500" : "bg-violet-500"
+                invoice.status === "paid" ? "bg-emerald-500" : "bg-sky-500"
               )}
               style={{ width: `${paidPct}%` }}
             />
@@ -314,8 +314,8 @@ function ModalFaturas({
             <ChevronLeft size={18} />
           </button>
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/20">
-            <CardIcon size={16} className="text-violet-400" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600/20">
+            <CardIcon size={16} className="text-sky-400" />
           </div>
         )}
         <div className="min-w-0 flex-1">
@@ -390,8 +390,8 @@ function CardCartao({
       <div className="flex-1 p-5">
         {/* Nome + bandeira */}
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/20">
-            <CardIcon size={20} className="text-violet-400" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-600/20">
+            <CardIcon size={20} className="text-sky-400" />
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-white">{card.name}</p>
@@ -430,7 +430,7 @@ function CardCartao({
             <div
               className={cn(
                 "h-1.5 rounded-full transition-all",
-                usedPct > 90 ? "bg-red-500" : usedPct > 70 ? "bg-amber-500" : "bg-violet-500"
+                usedPct > 90 ? "bg-red-500" : usedPct > 70 ? "bg-amber-500" : "bg-sky-500"
               )}
               style={{ width: `${usedPct}%` }}
             />
@@ -469,7 +469,7 @@ function CardCartao({
                     <div
                       className={cn(
                         "h-1 rounded-full transition-all",
-                        inv.status === "paid" ? "bg-emerald-500" : "bg-violet-500"
+                        inv.status === "paid" ? "bg-emerald-500" : "bg-sky-500"
                       )}
                       style={{ width: `${paidPct}%` }}
                     />
@@ -539,8 +539,8 @@ function InvoiceFlatCard({
         {/* Card info + status */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-600/20">
-              <CardIcon size={12} className="text-violet-400" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-600/20">
+              <CardIcon size={12} className="text-sky-400" />
             </div>
             <p className="truncate text-xs text-gray-400">
               {invoice.creditCardName}
@@ -571,7 +571,7 @@ function InvoiceFlatCard({
               <div
                 className={cn(
                   "h-1 rounded-full transition-all",
-                  invoice.status === "paid" ? "bg-emerald-500" : "bg-violet-500"
+                  invoice.status === "paid" ? "bg-emerald-500" : "bg-sky-500"
                 )}
                 style={{ width: `${paidPct}%` }}
               />
@@ -792,7 +792,7 @@ export function InvoicesPage() {
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               viewMode === "card"
-                ? "bg-violet-600/20 text-violet-400"
+                ? "bg-sky-600/20 text-sky-400"
                 : "text-gray-500 hover:text-white"
             )}
           >
@@ -803,7 +803,7 @@ export function InvoicesPage() {
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               viewMode === "invoice"
-                ? "bg-violet-600/20 text-violet-400"
+                ? "bg-sky-600/20 text-sky-400"
                 : "text-gray-500 hover:text-white"
             )}
           >

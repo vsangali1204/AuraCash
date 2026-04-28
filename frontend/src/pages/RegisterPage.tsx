@@ -53,7 +53,7 @@ export function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sky-600">
             <span className="text-xl font-bold text-white">A</span>
           </div>
           <h1 className="text-2xl font-bold text-white">AuraCash</h1>
@@ -100,7 +100,7 @@ export function RegisterPage() {
 
           <p className="text-center text-sm text-gray-500">
             Já tem conta?{" "}
-            <Link to="/login" className="text-violet-400 hover:text-violet-300">
+            <Link to="/login" className="text-sky-400 hover:text-sky-300">
               Entrar
             </Link>
           </p>
