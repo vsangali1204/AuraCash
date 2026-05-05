@@ -5,12 +5,13 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight, Bell } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { DASHBOARD_SUMMARY_QUERY, TRANSACTIONS_QUERY } from "@/graphql/queries/transactions";
+import { PendingRecurrencesModal } from "@/components/PendingRecurrencesModal";
+import { DASHBOARD_SUMMARY_QUERY, TRANSACTIONS_QUERY, PENDING_RECURRENCES_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { RECURRENCES_QUERY } from "@/graphql/queries/recurrences";
 import { RECEIVABLE_SUMMARY_QUERY } from "@/graphql/queries/receivables";
@@ -39,6 +40,7 @@ const TOOLTIP_STYLE = {
 
 export function DashboardPage() {
   const [navMonth, setNavMonth] = useState(getInitialMonth);
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(DASHBOARD_MONTH_KEY, JSON.stringify(navMonth));
@@ -68,12 +70,15 @@ export function DashboardPage() {
     variables: { activeOnly: true },
   });
   const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
+  const { data: pendingData } = useQuery<{ pendingRecurrences: Transaction[] }>(PENDING_RECURRENCES_QUERY);
 
   const summary = summaryData?.dashboardSummary;
   const accounts = accountsData?.accounts ?? [];
   const transactions = txData?.transactions ?? [];
   const recurrences = (recData?.recurrences ?? []).filter((r) => r.isActive && r.nextExecutionDate);
   const receivables = receivablesData?.receivableSummary ?? [];
+  const pendingRecurrences = pendingData?.pendingRecurrences ?? [];
+  const pendingCount = summary?.pendingRecurrencesCount ?? pendingRecurrences.length;
   const totalReceivable = receivables.reduce((s, r) => s + r.pendingAmount, 0);
 
   const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
@@ -83,6 +88,26 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {pendingCount > 0 && (
+        <button
+          onClick={() => setPendingModalOpen(true)}
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left hover:bg-amber-500/15 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
+              <Bell size={15} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">
+                {pendingCount} recorrência{pendingCount > 1 ? "s" : ""} aguardando confirmação
+              </p>
+              <p className="text-xs text-amber-500/80">Clique para revisar e confirmar os lançamentos do dia</p>
+            </div>
+          </div>
+          <span className="text-xs font-medium text-amber-400 shrink-0">Ver →</span>
+        </button>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold text-white">Dashboard</h1>
         <div className="flex items-center gap-1">
@@ -311,6 +336,13 @@ export function DashboardPage() {
           )}
         </Card>
       </div>
+
+      <PendingRecurrencesModal
+        transactions={pendingRecurrences}
+        isOpen={pendingModalOpen}
+        onClose={() => setPendingModalOpen(false)}
+        dashboardVars={navMonth}
+      />
 
       {/* Upcoming recurrences + receivables */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

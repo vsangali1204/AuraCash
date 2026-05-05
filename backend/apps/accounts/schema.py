@@ -25,23 +25,12 @@ class AccountType:
 def _compute_balance(account: Account) -> float:
     from apps.transactions.models import Transaction
 
-    income = (
-        Transaction.objects.filter(account=account, transaction_type="income")
-        .aggregate(total=Sum("amount"))["total"]
-        or Decimal("0")
-    )
-    expense = (
-        Transaction.objects.filter(account=account, transaction_type="expense")
-        .aggregate(total=Sum("amount"))["total"]
-        or Decimal("0")
-    )
-    transfer_out = (
-        Transaction.objects.filter(account=account, transaction_type="transfer")
-        .aggregate(total=Sum("amount"))["total"]
-        or Decimal("0")
-    )
+    base = Transaction.objects.filter(account=account, is_pending_recurrence=False)
+    income = base.filter(transaction_type="income").aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    expense = base.filter(transaction_type="expense").aggregate(total=Sum("amount"))["total"] or Decimal("0")
+    transfer_out = base.filter(transaction_type="transfer").aggregate(total=Sum("amount"))["total"] or Decimal("0")
     transfer_in = (
-        Transaction.objects.filter(transfer_account=account, transaction_type="transfer")
+        Transaction.objects.filter(transfer_account=account, transaction_type="transfer", is_pending_recurrence=False)
         .aggregate(total=Sum("amount"))["total"]
         or Decimal("0")
     )

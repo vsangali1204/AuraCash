@@ -61,6 +61,7 @@ class TransactionType:
     receipt_status: Optional[str]
     received_amount: float
     remaining_amount: float
+    is_pending_recurrence: bool
     notes: Optional[str]
     created_at: datetime
 
@@ -111,6 +112,7 @@ def map_transaction(t: Transaction) -> TransactionType:
         receipt_status=t.receipt_status,
         received_amount=float(t.received_amount),
         remaining_amount=float(t.remaining_amount),
+        is_pending_recurrence=t.is_pending_recurrence,
         notes=t.notes,
         created_at=t.created_at,
     )
@@ -146,6 +148,7 @@ class DashboardSummary:
     pending_invoices_amount: float # faturas com vencimento este mês, ainda não pagas
     future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
     projected_balance: float       # total_balance + future_income + receivable - invoices - future_expenses
+    pending_recurrences_count: int
     expense_by_category: list[CategoryExpense]
     income_by_category: list[CategoryExpense]
     balance_history: list[MonthBalance]
@@ -276,6 +279,14 @@ class TransactionQuery:
         return map_transaction(t)
 
     @strawberry.field
+    def pending_recurrences(self, info: strawberry.types.Info) -> list[TransactionType]:
+        user = require_auth(info)
+        qs = Transaction.objects.filter(
+            user=user, is_pending_recurrence=True
+        ).select_related("account", "transfer_account", "credit_card", "invoice", "category", "recurrence").order_by("date")
+        return [map_transaction(t) for t in qs]
+
+    @strawberry.field
     def dashboard_summary(
         self, info: strawberry.types.Info, year: int, month: int
     ) -> DashboardSummary:
@@ -289,7 +300,7 @@ class TransactionQuery:
         account_ids = [a.id for a in accounts]
 
         movements = (
-            Transaction.objects.filter(user=user, account_id__in=account_ids)
+            Transaction.objects.filter(user=user, account_id__in=account_ids, is_pending_recurrence=False)
             .aggregate(
                 total_income=Coalesce(
                     Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
@@ -306,7 +317,7 @@ class TransactionQuery:
             )
         )
         transfer_in = Transaction.objects.filter(
-            user=user, transaction_type="transfer", transfer_account_id__in=account_ids
+            user=user, transaction_type="transfer", transfer_account_id__in=account_ids, is_pending_recurrence=False
         ).aggregate(
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
         )["total"]
@@ -321,7 +332,7 @@ class TransactionQuery:
 
         # ── Mês corrente ─────────────────────────────────────────────────────
         month_agg = Transaction.objects.filter(
-            user=user, date__year=year, date__month=month
+            user=user, date__year=year, date__month=month, is_pending_recurrence=False
         ).aggregate(
             month_income=Coalesce(
                 Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
@@ -335,10 +346,15 @@ class TransactionQuery:
         month_income = float(month_agg["month_income"])
         month_expense = float(month_agg["month_expense"])
 
+        # ── Recorrências pendentes de confirmação ─────────────────────────────
+        pending_recurrences_count = Transaction.objects.filter(
+            user=user, is_pending_recurrence=True
+        ).count()
+
         # ── Total a receber (todos pendentes) ────────────────────────────────
         # exclude: transações-pai de parcelamentos evitam dupla contagem com as parcelas filhas
         receivable_qs = Transaction.objects.filter(
-            user=user, is_receivable=True, receipt_status__in=["pending", "partial"]
+            user=user, is_receivable=True, receipt_status__in=["pending", "partial"], is_pending_recurrence=False
         ).exclude(parent_transaction__isnull=True, total_installments__gt=1)
 
         receivable_agg = receivable_qs.aggregate(
@@ -366,6 +382,7 @@ class TransactionQuery:
         future_income_tx = float(Transaction.objects.filter(
             user=user, transaction_type="income",
             date__year=year, date__month=month, date__gt=today,
+            is_pending_recurrence=False,
         ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"])
 
         # + recorrências de receita que ainda não geraram transação neste mês
@@ -402,6 +419,7 @@ class TransactionQuery:
         future_expenses_tx = float(Transaction.objects.filter(
             user=user, transaction_type="expense",
             date__year=year, date__month=month, date__gt=today,
+            is_pending_recurrence=False,
         ).exclude(payment_method="credit").aggregate(
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
         )["total"])
@@ -426,6 +444,7 @@ class TransactionQuery:
             Transaction.objects.filter(
                 user=user, date__year=year, date__month=month,
                 transaction_type="expense", category__isnull=False,
+                is_pending_recurrence=False,
             )
             .values("category__name", "category__color")
             .annotate(total=Sum("amount"))
@@ -447,6 +466,7 @@ class TransactionQuery:
             Transaction.objects.filter(
                 user=user, date__year=year, date__month=month,
                 transaction_type="income", category__isnull=False,
+                is_pending_recurrence=False,
             )
             .values("category__name", "category__color")
             .annotate(total=Sum("amount"))
@@ -485,6 +505,7 @@ class TransactionQuery:
                 date__gte=first_date,
                 date__lte=date(last_y, last_m, 31) if last_m in (1,3,5,7,8,10,12) else date(last_y, last_m, 30),
                 transaction_type__in=["income", "expense"],
+                is_pending_recurrence=False,
             )
             .annotate(y=ExtractYear("date"), m=ExtractMonth("date"))
             .values("y", "m")
@@ -520,6 +541,7 @@ class TransactionQuery:
             pending_invoices_amount=pending_invoices_amount,
             future_expenses_amount=future_expenses_amount,
             projected_balance=total_balance + future_income_amount + month_receivable - pending_invoices_amount - future_expenses_amount,
+            pending_recurrences_count=pending_recurrences_count,
             expense_by_category=expense_by_category,
             income_by_category=income_by_category,
             balance_history=history,
@@ -775,4 +797,32 @@ class TransactionMutation:
     def delete_transaction(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
         user = require_auth(info)
         deleted, _ = Transaction.objects.filter(id=id, user=user).delete()
+        return deleted > 0
+
+    @strawberry.mutation
+    def confirm_pending_recurrence(
+        self,
+        info: strawberry.types.Info,
+        id: strawberry.ID,
+        amount: Optional[float] = None,
+    ) -> TransactionType:
+        user = require_auth(info)
+        t = Transaction.objects.filter(id=id, user=user, is_pending_recurrence=True).select_related(
+            "account", "transfer_account", "credit_card", "invoice", "category"
+        ).first()
+        if not t:
+            raise Exception("Lançamento pendente não encontrado.")
+        if amount is not None:
+            if amount <= 0:
+                raise ValueError("Valor deve ser positivo.")
+            t.amount = Decimal(str(amount))
+        t.is_pending_recurrence = False
+        t.save()
+        t.refresh_from_db()
+        return map_transaction(t)
+
+    @strawberry.mutation
+    def skip_pending_recurrence(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
+        user = require_auth(info)
+        deleted, _ = Transaction.objects.filter(id=id, user=user, is_pending_recurrence=True).delete()
         return deleted > 0

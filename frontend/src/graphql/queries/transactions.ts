@@ -16,6 +16,7 @@ const TRANSACTION_FIELDS = gql`
     receiptStatus
     receivedAmount
     remainingAmount
+    isPendingRecurrence
     installmentNumber
     totalInstallments
     account {
@@ -75,6 +76,7 @@ export const DASHBOARD_SUMMARY_QUERY = gql`
       pendingInvoicesAmount
       futureExpensesAmount
       projectedBalance
+      pendingRecurrencesCount
       expenseByCategory {
         categoryName
         categoryColor
@@ -130,5 +132,29 @@ export const UPDATE_TRANSACTION_MUTATION = gql`
 export const DELETE_TRANSACTION_MUTATION = gql`
   mutation DeleteTransaction($id: ID!) {
     deleteTransaction(id: $id)
+  }
+`;
+
+export const PENDING_RECURRENCES_QUERY = gql`
+  ${TRANSACTION_FIELDS}
+  query PendingRecurrences {
+    pendingRecurrences {
+      ...TransactionFields
+    }
+  }
+`;
+
+export const CONFIRM_PENDING_RECURRENCE_MUTATION = gql`
+  ${TRANSACTION_FIELDS}
+  mutation ConfirmPendingRecurrence($id: ID!, $amount: Float) {
+    confirmPendingRecurrence(id: $id, amount: $amount) {
+      ...TransactionFields
+    }
+  }
+`;
+
+export const SKIP_PENDING_RECURRENCE_MUTATION = gql`
+  mutation SkipPendingRecurrence($id: ID!) {
+    skipPendingRecurrence(id: $id)
   }
 `;

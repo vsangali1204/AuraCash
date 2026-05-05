@@ -61,7 +61,7 @@ def process_recurrences():
             kwargs["installment_number"] = 1
             kwargs["total_installments"] = 1
 
-        Transaction.objects.create(**kwargs)
+        Transaction.objects.create(**kwargs, is_pending_recurrence=True)
         created += 1
 
     return f"{created} recorrência(s) processada(s) em {today}"

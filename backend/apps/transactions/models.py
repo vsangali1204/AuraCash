@@ -101,6 +101,10 @@ class Transaction(models.Model):
         null=True,
         blank=True,
     )
+    is_pending_recurrence = models.BooleanField(
+        default=False,
+        help_text="Criado pela task de recorrência, aguarda confirmação do usuário",
+    )
 
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
