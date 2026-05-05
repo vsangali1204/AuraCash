@@ -153,12 +153,6 @@ export function ReceivablesPage() {
     );
   }, [filteredTransactions]);
 
-  const debtorNames = useMemo(
-    () =>
-      [...new Set(allTxs.map((tx) => tx.debtorName).filter(Boolean) as string[])].sort(),
-    [allTxs]
-  );
-
   // ── Seleção ───────────────────────────────────────────────────────────────
 
   const pendingIds = filteredTransactions.map((t) => t.id);
