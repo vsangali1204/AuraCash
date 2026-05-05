@@ -1,11 +1,12 @@
 import { useMutation, useQuery } from "@apollo/client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
   Clock, Calendar, ChevronDown, ChevronUp, CreditCard, ArrowLeftRight,
+  List, UserCheck, Search, X,
 } from "lucide-react";
 import { z } from "zod";
 
@@ -49,6 +50,7 @@ type BulkFormData = z.infer<typeof bulkSchema>;
 // ── Período helpers ────────────────────────────────────────────────────────
 
 type Period = "next_month" | "this_month" | "overdue" | "all";
+type ViewMode = "list" | "by_person";
 
 const PERIOD_TABS: { value: Period; label: string; icon: React.ReactNode }[] = [
   { value: "next_month", label: "Próximo mês",  icon: <Calendar size={13} /> },
@@ -57,14 +59,20 @@ const PERIOD_TABS: { value: Period; label: string; icon: React.ReactNode }[] = [
   { value: "all",        label: "Todos",        icon: <Users size={13} /> },
 ];
 
+const NO_DEBTOR_KEY = "__sem_devedor__";
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function ReceivablesPage() {
   const [period, setPeriod] = useState<Period>("next_month");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [debtorFilter, setDebtorFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [receivingTx, setReceivingTx] = useState<Transaction | null>(null);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkPersonLabel, setBulkPersonLabel] = useState<string | null>(null);
   const [expandedTx, setExpandedTx] = useState<string | null>(null);
+  const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
 
@@ -114,9 +122,46 @@ export function ReceivablesPage() {
   const thisMonthTotal = allTxs.filter(isThisMonth).reduce((s, t) => s + t.remainingAmount, 0);
   const overdueTotal   = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
 
+  // ── Filtro por devedor ────────────────────────────────────────────────────
+
+  const filteredTransactions = useMemo(() => {
+    if (!debtorFilter.trim()) return transactions;
+    const q = debtorFilter.toLowerCase();
+    return transactions.filter(
+      (tx) =>
+        tx.debtorName?.toLowerCase().includes(q) ||
+        tx.description.toLowerCase().includes(q)
+    );
+  }, [transactions, debtorFilter]);
+
+  // ── Agrupamento por pessoa ────────────────────────────────────────────────
+
+  const groupedByPerson = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+    for (const tx of filteredTransactions) {
+      const key = tx.debtorName ?? NO_DEBTOR_KEY;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(tx);
+    }
+    // Ordena por saldo pendente decrescente
+    return new Map(
+      [...map.entries()].sort(
+        ([, a], [, b]) =>
+          b.reduce((s, t) => s + t.remainingAmount, 0) -
+          a.reduce((s, t) => s + t.remainingAmount, 0)
+      )
+    );
+  }, [filteredTransactions]);
+
+  const debtorNames = useMemo(
+    () =>
+      [...new Set(allTxs.map((tx) => tx.debtorName).filter(Boolean) as string[])].sort(),
+    [allTxs]
+  );
+
   // ── Seleção ───────────────────────────────────────────────────────────────
 
-  const pendingIds = transactions.map((t) => t.id);
+  const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
 
   function toggleAll() {
@@ -135,7 +180,25 @@ export function ReceivablesPage() {
     });
   }
 
-  // Limpa seleção ao trocar período
+  function togglePerson(key: string) {
+    const personTxs = groupedByPerson.get(key) ?? [];
+    const allPersonSelected = personTxs.every((tx) => selected.has(tx.id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPersonSelected) {
+        personTxs.forEach((tx) => next.delete(tx.id));
+      } else {
+        personTxs.forEach((tx) => next.add(tx.id));
+      }
+      return next;
+    });
+  }
+
+  function selectOnlyPerson(key: string) {
+    const personTxs = groupedByPerson.get(key) ?? [];
+    setSelected(new Set(personTxs.map((tx) => tx.id)));
+  }
+
   function changePeriod(p: Period) {
     setPeriod(p);
     setSelected(new Set());
@@ -161,6 +224,7 @@ export function ReceivablesPage() {
     onCompleted: (d) => {
       toast.success(`${d.bulkReceive} recebimento(s) registrado(s)!`);
       setBulkModalOpen(false);
+      setBulkPersonLabel(null);
       setSelected(new Set());
     },
     onError: (e) => toast.error(e.message),
@@ -187,12 +251,19 @@ export function ReceivablesPage() {
     });
   }
 
-  function openBulk() {
+  function openBulk(personLabel?: string) {
     bulkForm.reset({
       receiptDate: todayISO(),
       destinationAccountId: accounts[0]?.id ?? "",
     });
+    setBulkPersonLabel(personLabel ?? null);
     setBulkModalOpen(true);
+  }
+
+  function openBulkForPerson(key: string) {
+    selectOnlyPerson(key);
+    const label = key === NO_DEBTOR_KEY ? "sem devedor" : key;
+    openBulk(label);
   }
 
   function onReceiptSubmit(data: ReceiptFormData) {
@@ -223,9 +294,108 @@ export function ReceivablesPage() {
     });
   }
 
-  const selectedAmount = transactions
+  const selectedAmount = filteredTransactions
     .filter((t) => selected.has(t.id))
     .reduce((s, t) => s + t.remainingAmount, 0);
+
+  // ── Render helpers ────────────────────────────────────────────────────────
+
+  function renderTxRow(tx: Transaction) {
+    const isSelected = selected.has(tx.id);
+    const isExpanded = expandedTx === tx.id;
+    const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
+
+    return (
+      <div key={tx.id} className={`transition-colors ${isSelected ? "bg-sky-500/5" : ""}`}>
+        <div className="flex items-start gap-3 px-4 py-3">
+          <button
+            onClick={() => toggleOne(tx.id)}
+            className="mt-0.5 shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
+          >
+            {isSelected
+              ? <CheckSquare size={18} className="text-sky-400" />
+              : <Square size={18} />}
+          </button>
+
+          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            tx.transactionType === "expense" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
+          }`}>
+            {tx.paymentMethod === "credit" ? <CreditCard size={14} /> : <ArrowLeftRight size={14} />}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <p className="text-sm font-medium text-white truncate">{tx.description}</p>
+                  {tx.totalInstallments && tx.totalInstallments > 1 && (
+                    <span className="rounded bg-surface px-1.5 py-0.5 text-xs text-gray-400 shrink-0">
+                      {tx.installmentNumber}/{tx.totalInstallments}x
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {tx.debtorName && viewMode === "list" && (
+                    <span className="text-xs font-medium text-amber-400">↩ {tx.debtorName}</span>
+                  )}
+                  <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
+                  <span className="text-xs text-gray-500">{PAYMENT_METHOD_LABELS[tx.paymentMethod]}</span>
+                  {tx.competenceDate && (
+                    <span className={`text-xs font-medium ${isOverdueItem ? "text-red-400" : "text-sky-400"}`}>
+                      {isOverdueItem ? "⚠ Venceu " : "Prev. "}
+                      {formatDate(tx.competenceDate)}
+                    </span>
+                  )}
+                  {tx.receiptStatus && (
+                    <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>
+                      {RECEIPT_STATUS_LABELS[tx.receiptStatus]}
+                    </Badge>
+                  )}
+                </div>
+                {tx.receivedAmount > 0 && (
+                  <p className="mt-0.5 text-xs text-emerald-400">
+                    Recebido: {formatCurrency(tx.receivedAmount)}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <p className="text-sm font-semibold text-white whitespace-nowrap">
+                  {formatCurrency(tx.amount)}
+                </p>
+                {tx.remainingAmount < tx.amount && (
+                  <p className="text-xs text-amber-400 whitespace-nowrap">
+                    Pendente: {formatCurrency(tx.remainingAmount)}
+                  </p>
+                )}
+                <div className="flex items-center gap-1">
+                  {tx.invoice && (
+                    <button
+                      onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
+                      className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
+                    >
+                      {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    </button>
+                  )}
+                  <Button size="sm" variant="secondary" onClick={() => openReceipt(tx)}>
+                    <DollarSign size={12} /> Receber
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && tx.invoice && (
+          <div className="border-t border-surface-border bg-surface px-4 py-2 text-xs text-gray-400 flex flex-wrap gap-3">
+            <span>Cartão: {tx.creditCard?.name}</span>
+            <span>Fatura: {formatMonthYear(tx.invoice.referenceMonth)}</span>
+            <span>Venc.: {formatDate(tx.invoice.dueDate)}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -240,10 +410,10 @@ export function ReceivablesPage() {
       {/* Cards de resumo por período */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Próximo mês", value: nextMonthTotal, color: "sky", period: "next_month" as Period },
-          { label: "Este mês",    value: thisMonthTotal, color: "blue",   period: "this_month" as Period },
-          { label: "Atrasados",   value: overdueTotal,   color: "red",    period: "overdue" as Period },
-          { label: "Total geral", value: totalPending,   color: "amber",  period: "all" as Period },
+          { label: "Próximo mês", value: nextMonthTotal, color: "sky",   period: "next_month" as Period },
+          { label: "Este mês",    value: thisMonthTotal, color: "blue",  period: "this_month" as Period },
+          { label: "Atrasados",   value: overdueTotal,   color: "red",   period: "overdue" as Period },
+          { label: "Total geral", value: totalPending,   color: "amber", period: "all" as Period },
         ].map((card) => (
           <button
             key={card.period}
@@ -267,21 +437,71 @@ export function ReceivablesPage() {
         ))}
       </div>
 
-      {/* Tabs de período */}
-      <div className="flex flex-wrap gap-2">
-        {PERIOD_TABS.map((tab) => (
+      {/* Tabs de período + controles de visualização */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {PERIOD_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => changePeriod(tab.value)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                period === tab.value
+                  ? "bg-sky-600 text-white"
+                  : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Toggle de visualização */}
+        <div className="flex rounded-lg border border-surface-border overflow-hidden">
           <button
-            key={tab.value}
-            onClick={() => changePeriod(tab.value)}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              period === tab.value
-                ? "bg-sky-600 text-white"
-                : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
+            onClick={() => setViewMode("list")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
+              viewMode === "list"
+                ? "bg-surface-hover text-white"
+                : "bg-surface-card text-gray-400 hover:text-white"
             }`}
           >
-            {tab.icon} {tab.label}
+            <List size={14} /> Lista
           </button>
-        ))}
+          <button
+            onClick={() => setViewMode("by_person")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-surface-border ${
+              viewMode === "by_person"
+                ? "bg-surface-hover text-white"
+                : "bg-surface-card text-gray-400 hover:text-white"
+            }`}
+          >
+            <UserCheck size={14} /> Por pessoa
+          </button>
+        </div>
+      </div>
+
+      {/* Filtro por nome */}
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+        <input
+          type="text"
+          placeholder={
+            viewMode === "by_person"
+              ? "Filtrar por pessoa ou descrição…"
+              : "Filtrar por devedor ou descrição…"
+          }
+          value={debtorFilter}
+          onChange={(e) => setDebtorFilter(e.target.value)}
+          className="w-full rounded-lg border border-surface-border bg-surface-card py-2 pl-8 pr-8 text-sm text-white placeholder-gray-500 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
+        />
+        {debtorFilter && (
+          <button
+            onClick={() => setDebtorFilter("")}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* Barra de ação em lote */}
@@ -299,144 +519,137 @@ export function ReceivablesPage() {
             <Button variant="secondary" size="sm" onClick={() => setSelected(new Set())}>
               Limpar
             </Button>
-            <Button size="sm" onClick={openBulk}>
+            <Button size="sm" onClick={() => openBulk()}>
               <DollarSign size={14} /> Receber todos
             </Button>
           </div>
         </div>
       )}
 
-      {/* Lista */}
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />)}
-        </div>
-      ) : transactions.length === 0 ? (
-        <Card className="flex flex-col items-center gap-3 py-16">
-          <Users size={40} className="text-gray-600" />
-          <p className="text-sm text-gray-500">
-            {period === "next_month" ? "Nenhum valor previsto para o próximo mês."
-            : period === "this_month" ? "Nenhum valor previsto para este mês."
-            : period === "overdue" ? "Nenhum valor atrasado."
-            : "Nenhum valor a receber pendente."}
-          </p>
-        </Card>
-      ) : (
-        <Card padding="none" className="overflow-hidden">
-          {/* Cabeçalho da lista */}
-          <div className="flex items-center gap-3 border-b border-surface-border px-4 py-3">
-            <button onClick={toggleAll} className="text-gray-400 hover:text-white transition-colors shrink-0">
-              {allSelected ? <CheckSquare size={18} className="text-sky-400" /> : <Square size={18} />}
-            </button>
-            <span className="text-xs font-medium text-gray-500 flex-1">
-              {transactions.length} lançamento(s) · {formatCurrency(transactions.reduce((s, t) => s + t.remainingAmount, 0))} pendente
-            </span>
-          </div>
+      {/* ── VISUALIZAÇÃO LISTA ──────────────────────────────────────────────── */}
+      {viewMode === "list" && (
+        <>
+          {loading ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />)}
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <Card className="flex flex-col items-center gap-3 py-16">
+              <Users size={40} className="text-gray-600" />
+              <p className="text-sm text-gray-500">
+                {debtorFilter
+                  ? `Nenhum resultado para "${debtorFilter}".`
+                  : period === "next_month" ? "Nenhum valor previsto para o próximo mês."
+                  : period === "this_month" ? "Nenhum valor previsto para este mês."
+                  : period === "overdue" ? "Nenhum valor atrasado."
+                  : "Nenhum valor a receber pendente."}
+              </p>
+            </Card>
+          ) : (
+            <Card padding="none" className="overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-surface-border px-4 py-3">
+                <button onClick={toggleAll} className="text-gray-400 hover:text-white transition-colors shrink-0">
+                  {allSelected ? <CheckSquare size={18} className="text-sky-400" /> : <Square size={18} />}
+                </button>
+                <span className="text-xs font-medium text-gray-500 flex-1">
+                  {filteredTransactions.length} lançamento(s) · {formatCurrency(filteredTransactions.reduce((s, t) => s + t.remainingAmount, 0))} pendente
+                </span>
+              </div>
+              <div className="divide-y divide-surface-border">
+                {filteredTransactions.map(renderTxRow)}
+              </div>
+            </Card>
+          )}
+        </>
+      )}
 
-          <div className="divide-y divide-surface-border">
-            {transactions.map((tx) => {
-              const isSelected = selected.has(tx.id);
-              const isExpanded = expandedTx === tx.id;
-              const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
+      {/* ── VISUALIZAÇÃO POR PESSOA ─────────────────────────────────────────── */}
+      {viewMode === "by_person" && (
+        <>
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-card" />)}
+            </div>
+          ) : groupedByPerson.size === 0 ? (
+            <Card className="flex flex-col items-center gap-3 py-16">
+              <UserCheck size={40} className="text-gray-600" />
+              <p className="text-sm text-gray-500">
+                {debtorFilter ? `Nenhum resultado para "${debtorFilter}".` : "Nenhum valor a receber pendente."}
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {[...groupedByPerson.entries()].map(([key, txs]) => {
+                const personLabel = key === NO_DEBTOR_KEY ? "Sem devedor" : key;
+                const personPending = txs.reduce((s, t) => s + t.remainingAmount, 0);
+                const personTotal = txs.reduce((s, t) => s + t.amount, 0);
+                const personSelected = txs.every((tx) => selected.has(tx.id));
+                const personPartial = txs.some((tx) => selected.has(tx.id)) && !personSelected;
+                const isExpanded = expandedPerson === key;
 
-              return (
-                <div key={tx.id} className={`transition-colors ${isSelected ? "bg-sky-500/5" : ""}`}>
-                  <div className="flex items-start gap-3 px-4 py-3">
-                    {/* Checkbox */}
-                    <button
-                      onClick={() => toggleOne(tx.id)}
-                      className="mt-0.5 shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
-                    >
-                      {isSelected
-                        ? <CheckSquare size={18} className="text-sky-400" />
-                        : <Square size={18} />}
-                    </button>
+                return (
+                  <Card key={key} padding="none" className="overflow-hidden">
+                    {/* Cabeçalho da pessoa */}
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <button
+                        onClick={() => togglePerson(key)}
+                        className="shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
+                      >
+                        {personSelected
+                          ? <CheckSquare size={18} className="text-sky-400" />
+                          : personPartial
+                          ? <CheckSquare size={18} className="text-sky-400/50" />
+                          : <Square size={18} />}
+                      </button>
 
-                    {/* Ícone tipo */}
-                    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                      tx.transactionType === "expense" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
-                    }`}>
-                      {tx.paymentMethod === "credit" ? <CreditCard size={14} /> : <ArrowLeftRight size={14} />}
-                    </div>
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+                        <Users size={16} />
+                      </div>
 
-                    {/* Conteúdo */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-sm font-medium text-white truncate">{tx.description}</p>
-                            {tx.totalInstallments && tx.totalInstallments > 1 && (
-                              <span className="rounded bg-surface px-1.5 py-0.5 text-xs text-gray-400 shrink-0">
-                                {tx.installmentNumber}/{tx.totalInstallments}x
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                            {tx.debtorName && (
-                              <span className="text-xs font-medium text-amber-400">↩ {tx.debtorName}</span>
-                            )}
-                            <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
-                            <span className="text-xs text-gray-500">{PAYMENT_METHOD_LABELS[tx.paymentMethod]}</span>
-                            {tx.competenceDate && (
-                              <span className={`text-xs font-medium ${isOverdueItem ? "text-red-400" : "text-sky-400"}`}>
-                                {isOverdueItem ? "⚠ Venceu " : "Prev. "}
-                                {formatDate(tx.competenceDate)}
-                              </span>
-                            )}
-                            {tx.receiptStatus && (
-                              <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>
-                                {RECEIPT_STATUS_LABELS[tx.receiptStatus]}
-                              </Badge>
-                            )}
-                          </div>
-                          {tx.receivedAmount > 0 && (
-                            <p className="mt-0.5 text-xs text-emerald-400">
-                              Recebido: {formatCurrency(tx.receivedAmount)}
-                            </p>
-                          )}
-                        </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{personLabel}</p>
+                        <p className="text-xs text-gray-500">
+                          {txs.length} lançamento(s) · total {formatCurrency(personTotal)}
+                        </p>
+                      </div>
 
-                        {/* Valor + ações */}
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <p className="text-sm font-semibold text-white whitespace-nowrap">
-                            {formatCurrency(tx.amount)}
+                      <div className="flex shrink-0 items-center gap-2">
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-amber-400 whitespace-nowrap">
+                            {formatCurrency(personPending)}
                           </p>
-                          {tx.remainingAmount < tx.amount && (
-                            <p className="text-xs text-amber-400 whitespace-nowrap">
-                              Pendente: {formatCurrency(tx.remainingAmount)}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-1">
-                            {tx.invoice && (
-                              <button
-                                onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
-                                className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
-                              >
-                                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                              </button>
-                            )}
-                            <Button size="sm" variant="secondary" onClick={() => openReceipt(tx)}>
-                              <DollarSign size={12} /> Receber
-                            </Button>
-                          </div>
+                          <p className="text-xs text-gray-500">pendente</p>
                         </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => openBulkForPerson(key)}
+                          title={`Receber tudo de ${personLabel}`}
+                        >
+                          <DollarSign size={12} /> Receber tudo
+                        </Button>
+
+                        <button
+                          onClick={() => setExpandedPerson(isExpanded ? null : key)}
+                          className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Detalhe fatura (expansível) */}
-                  {isExpanded && tx.invoice && (
-                    <div className="border-t border-surface-border bg-surface px-4 py-2 text-xs text-gray-400 flex flex-wrap gap-3">
-                      <span>Cartão: {tx.creditCard?.name}</span>
-                      <span>Fatura: {formatMonthYear(tx.invoice.referenceMonth)}</span>
-                      <span>Venc.: {formatDate(tx.invoice.dueDate)}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+                    {/* Lançamentos da pessoa (expansível) */}
+                    {isExpanded && (
+                      <div className="border-t border-surface-border divide-y divide-surface-border">
+                        {txs.map(renderTxRow)}
+                      </div>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Modal — Registrar recebimento individual */}
@@ -477,9 +690,14 @@ export function ReceivablesPage() {
       </Modal>
 
       {/* Modal — Receber em lote */}
-      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Receber em lote" size="sm">
+      <Modal open={bulkModalOpen} onClose={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }} title="Receber em lote" size="sm">
         <div className="space-y-4">
           <div className="rounded-lg bg-surface p-3 text-sm space-y-1">
+            {bulkPersonLabel && (
+              <p className="font-medium text-white">
+                Devedor: <span className="text-amber-400">{bulkPersonLabel}</span>
+              </p>
+            )}
             <p className="text-gray-500">
               Serão registrados <span className="text-white font-semibold">{selected.size} recebimento(s)</span>
             </p>
@@ -499,7 +717,7 @@ export function ReceivablesPage() {
               {...bulkForm.register("destinationAccountId")} />
             <Input label="Observação (opcional)" {...bulkForm.register("notes")} />
             <div className="flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={() => setBulkModalOpen(false)}>Cancelar</Button>
+              <Button type="button" variant="secondary" onClick={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}>Cancelar</Button>
               <Button type="submit" loading={bulkLoading}>
                 <DollarSign size={14} /> Confirmar recebimento
               </Button>
