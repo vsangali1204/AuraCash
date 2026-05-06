@@ -3,7 +3,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, RefreshCw, Pause, Play } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Pause, Play, Zap } from "lucide-react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -15,7 +15,9 @@ import { Badge } from "@/components/ui/Badge";
 import {
   RECURRENCES_QUERY, CREATE_RECURRENCE_MUTATION,
   UPDATE_RECURRENCE_MUTATION, TOGGLE_RECURRENCE_MUTATION, DELETE_RECURRENCE_MUTATION,
+  PROCESS_RECURRENCES_MUTATION,
 } from "@/graphql/queries/recurrences";
+import { PENDING_RECURRENCES_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CATEGORIES_QUERY } from "@/graphql/queries/categories";
 import { CREDIT_CARDS_QUERY } from "@/graphql/queries/creditCards";
@@ -115,6 +117,19 @@ export function RecurrencesPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const [processRec, { loading: processing }] = useMutation<{ processRecurrences: number }>(
+    PROCESS_RECURRENCES_MUTATION,
+    {
+      refetchQueries: [RECURRENCES_QUERY, { query: PENDING_RECURRENCES_QUERY }],
+      onCompleted: (d) => {
+        const n = d.processRecurrences;
+        if (n === 0) toast("Nenhuma recorrência nova para processar.", { icon: "ℹ️" });
+        else toast.success(`${n} recorrência(s) gerada(s) e aguardando confirmação!`);
+      },
+      onError: (e) => toast.error(e.message),
+    }
+  );
+
   function openCreate() {
     setEditing(null);
     reset({ recurrenceType: "expense", paymentMethod: "pix", dayOfMonth: 1, useBusinessDay: false, startDate: todayISO() });
@@ -172,7 +187,18 @@ export function RecurrencesPage() {
             {allRecurrences.filter((r) => r.isActive).length} ativa(s) de {allRecurrences.length} total
           </p>
         </div>
-        <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Nova recorrência</Button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant="secondary"
+            onClick={() => processRec()}
+            loading={processing}
+            className="flex-1 sm:flex-none"
+            title="Gera os lançamentos pendentes do mês atual para todas as recorrências ativas"
+          >
+            <Zap size={16} /> Processar agora
+          </Button>
+          <Button onClick={openCreate} className="flex-1 sm:flex-none"><Plus size={16} /> Nova recorrência</Button>
+        </div>
       </div>
 
       {/* Tabs */}

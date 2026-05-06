@@ -63,3 +63,9 @@ export const DELETE_RECURRENCE_MUTATION = gql`
     deleteRecurrence(id: $id)
   }
 `;
+
+export const PROCESS_RECURRENCES_MUTATION = gql`
+  mutation ProcessRecurrences {
+    processRecurrences
+  }
+`;
