@@ -5,8 +5,8 @@ import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
-  Clock, Calendar, ChevronDown, ChevronUp, CreditCard, ArrowLeftRight,
-  List, UserCheck, Search, X,
+  Clock, Calendar, ChevronDown, ChevronUp, List,
+  UserCheck, Search, X, TrendingDown, TrendingUp,
 } from "lucide-react";
 import { z } from "zod";
 
@@ -24,12 +24,10 @@ import {
 } from "@/graphql/queries/receivables";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
-  formatCurrency, formatDate, formatMonthYear,
+  cn, formatCurrency, formatDate,
   RECEIPT_STATUS_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, Transaction } from "@/types";
-
-// ── Schemas ────────────────────────────────────────────────────────────────
 
 const receiptSchema = z.object({
   amountReceived: z.coerce.number().positive("Valor positivo"),
@@ -47,21 +45,17 @@ const bulkSchema = z.object({
 type ReceiptFormData = z.infer<typeof receiptSchema>;
 type BulkFormData = z.infer<typeof bulkSchema>;
 
-// ── Período helpers ────────────────────────────────────────────────────────
-
 type Period = "next_month" | "this_month" | "overdue" | "all";
 type ViewMode = "list" | "by_person";
 
-const PERIOD_TABS: { value: Period; label: string; icon: React.ReactNode }[] = [
-  { value: "next_month", label: "Próximo mês",  icon: <Calendar size={13} /> },
-  { value: "this_month", label: "Este mês",     icon: <Clock size={13} /> },
-  { value: "overdue",    label: "Atrasados",    icon: <AlertCircle size={13} /> },
-  { value: "all",        label: "Todos",        icon: <Users size={13} /> },
+const PERIOD_TABS: { value: Period; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+  { value: "next_month", label: "Próximo mês",  shortLabel: "Próx. mês", icon: <Calendar size={13} /> },
+  { value: "this_month", label: "Este mês",     shortLabel: "Este mês",  icon: <Clock size={13} /> },
+  { value: "overdue",    label: "Atrasados",    shortLabel: "Atrasados", icon: <AlertCircle size={13} /> },
+  { value: "all",        label: "Todos",        shortLabel: "Todos",     icon: <Users size={13} /> },
 ];
 
 const NO_DEBTOR_KEY = "__sem_devedor__";
-
-// ── Component ──────────────────────────────────────────────────────────────
 
 export function ReceivablesPage() {
   const [period, setPeriod] = useState<Period>("next_month");
@@ -71,17 +65,11 @@ export function ReceivablesPage() {
   const [receivingTx, setReceivingTx] = useState<Transaction | null>(null);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkPersonLabel, setBulkPersonLabel] = useState<string | null>(null);
-  const [expandedTx, setExpandedTx] = useState<string | null>(null);
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
-
-  // ── Queries ──────────────────────────────────────────────────────────────
 
   const { data: txData, loading } = useQuery<{ receivableTransactions: Transaction[] }>(
     RECEIVABLE_TRANSACTIONS_QUERY,
-    {
-      variables: { period: period === "all" ? null : period },
-      fetchPolicy: "cache-and-network",
-    }
+    { variables: { period: period === "all" ? null : period }, fetchPolicy: "cache-and-network" }
   );
 
   const { data: summaryData } = useQuery<{ receivableTransactions: Transaction[] }>(
@@ -95,8 +83,6 @@ export function ReceivablesPage() {
   const allTxs = summaryData?.receivableTransactions ?? [];
   const accounts = accountsData?.accounts ?? [];
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
-
-  // ── Totais do cabeçalho ───────────────────────────────────────────────────
 
   const now = new Date();
   const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
@@ -117,24 +103,18 @@ export function ReceivablesPage() {
     return tx.competenceDate < todayISO();
   }
 
-  const totalPending = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
-  const nextMonthTotal = allTxs.filter(isNextMonth).reduce((s, t) => s + t.remainingAmount, 0);
-  const thisMonthTotal = allTxs.filter(isThisMonth).reduce((s, t) => s + t.remainingAmount, 0);
-  const overdueTotal   = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
-
-  // ── Filtro por devedor ────────────────────────────────────────────────────
+  const totalPending    = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
+  const nextMonthTotal  = allTxs.filter(isNextMonth).reduce((s, t) => s + t.remainingAmount, 0);
+  const thisMonthTotal  = allTxs.filter(isThisMonth).reduce((s, t) => s + t.remainingAmount, 0);
+  const overdueTotal    = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
 
   const filteredTransactions = useMemo(() => {
     if (!debtorFilter.trim()) return transactions;
     const q = debtorFilter.toLowerCase();
     return transactions.filter(
-      (tx) =>
-        tx.debtorName?.toLowerCase().includes(q) ||
-        tx.description.toLowerCase().includes(q)
+      (tx) => tx.debtorName?.toLowerCase().includes(q) || tx.description.toLowerCase().includes(q)
     );
   }, [transactions, debtorFilter]);
-
-  // ── Agrupamento por pessoa ────────────────────────────────────────────────
 
   const groupedByPerson = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -143,7 +123,6 @@ export function ReceivablesPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(tx);
     }
-    // Ordena por saldo pendente decrescente
     return new Map(
       [...map.entries()].sort(
         ([, a], [, b]) =>
@@ -153,17 +132,11 @@ export function ReceivablesPage() {
     );
   }, [filteredTransactions]);
 
-  // ── Seleção ───────────────────────────────────────────────────────────────
-
   const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
 
   function toggleAll() {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(pendingIds));
-    }
+    setSelected(allSelected ? new Set() : new Set(pendingIds));
   }
 
   function toggleOne(id: string) {
@@ -179,11 +152,8 @@ export function ReceivablesPage() {
     const allPersonSelected = personTxs.every((tx) => selected.has(tx.id));
     setSelected((prev) => {
       const next = new Set(prev);
-      if (allPersonSelected) {
-        personTxs.forEach((tx) => next.delete(tx.id));
-      } else {
-        personTxs.forEach((tx) => next.add(tx.id));
-      }
+      if (allPersonSelected) personTxs.forEach((tx) => next.delete(tx.id));
+      else personTxs.forEach((tx) => next.add(tx.id));
       return next;
     });
   }
@@ -197,8 +167,6 @@ export function ReceivablesPage() {
     setPeriod(p);
     setSelected(new Set());
   }
-
-  // ── Mutations ─────────────────────────────────────────────────────────────
 
   const refetchVars = [
     { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: period === "all" ? null : period } },
@@ -224,8 +192,6 @@ export function ReceivablesPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  // ── Forms ─────────────────────────────────────────────────────────────────
-
   const receiptForm = useForm<ReceiptFormData>({
     resolver: zodResolver(receiptSchema),
     defaultValues: { receiptDate: todayISO() },
@@ -246,18 +212,14 @@ export function ReceivablesPage() {
   }
 
   function openBulk(personLabel?: string) {
-    bulkForm.reset({
-      receiptDate: todayISO(),
-      destinationAccountId: accounts[0]?.id ?? "",
-    });
+    bulkForm.reset({ receiptDate: todayISO(), destinationAccountId: accounts[0]?.id ?? "" });
     setBulkPersonLabel(personLabel ?? null);
     setBulkModalOpen(true);
   }
 
   function openBulkForPerson(key: string) {
     selectOnlyPerson(key);
-    const label = key === NO_DEBTOR_KEY ? "sem devedor" : key;
-    openBulk(label);
+    openBulk(key === NO_DEBTOR_KEY ? "sem devedor" : key);
   }
 
   function onReceiptSubmit(data: ReceiptFormData) {
@@ -292,301 +254,343 @@ export function ReceivablesPage() {
     .filter((t) => selected.has(t.id))
     .reduce((s, t) => s + t.remainingAmount, 0);
 
-  // ── Render helpers ────────────────────────────────────────────────────────
+  // ── Row de transação redesenhado para mobile-first ─────────────────────────
 
   function renderTxRow(tx: Transaction) {
     const isSelected = selected.has(tx.id);
-    const isExpanded = expandedTx === tx.id;
     const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
+    const isPartial = tx.receivedAmount > 0;
 
     return (
-      <div key={tx.id} className={`transition-colors ${isSelected ? "bg-sky-500/5" : ""}`}>
-        <div className="flex items-start gap-3 px-4 py-3">
+      <div
+        key={tx.id}
+        className={cn(
+          "group px-4 py-4 transition-colors",
+          isSelected ? "bg-sky-500/5" : "hover:bg-surface-hover/30"
+        )}
+      >
+        <div className="flex gap-3">
+          {/* Checkbox */}
           <button
             onClick={() => toggleOne(tx.id)}
-            className="mt-0.5 shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
+            className="mt-0.5 shrink-0 text-gray-500 hover:text-sky-400 transition-colors"
           >
             {isSelected
               ? <CheckSquare size={18} className="text-sky-400" />
               : <Square size={18} />}
           </button>
 
-          <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-            tx.transactionType === "expense" ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-400"
-          }`}>
-            {tx.paymentMethod === "credit" ? <CreditCard size={14} /> : <ArrowLeftRight size={14} />}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <p className="text-sm font-medium text-white truncate">{tx.description}</p>
-                  {tx.totalInstallments && tx.totalInstallments > 1 && (
-                    <span className="rounded bg-surface px-1.5 py-0.5 text-xs text-gray-400 shrink-0">
-                      {tx.installmentNumber}/{tx.totalInstallments}x
-                    </span>
-                  )}
-                </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {tx.debtorName && viewMode === "list" && (
-                    <span className="text-xs font-medium text-amber-400">↩ {tx.debtorName}</span>
-                  )}
-                  <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
-                  <span className="text-xs text-gray-500">{PAYMENT_METHOD_LABELS[tx.paymentMethod]}</span>
-                  {tx.competenceDate && (
-                    <span className={`text-xs font-medium ${isOverdueItem ? "text-red-400" : "text-sky-400"}`}>
-                      {isOverdueItem ? "⚠ Venceu " : "Prev. "}
-                      {formatDate(tx.competenceDate)}
-                    </span>
-                  )}
-                  {tx.receiptStatus && (
-                    <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>
-                      {RECEIPT_STATUS_LABELS[tx.receiptStatus]}
-                    </Badge>
-                  )}
-                </div>
-                {tx.receivedAmount > 0 && (
-                  <p className="mt-0.5 text-xs text-emerald-400">
-                    Recebido: {formatCurrency(tx.receivedAmount)}
+          <div className="flex-1 min-w-0 space-y-2">
+            {/* Linha 1: descrição + valor */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-white leading-snug">
+                  {tx.description}
+                </p>
+                {tx.debtorName && viewMode === "list" && (
+                  <p className="mt-0.5 text-xs font-medium text-amber-400 flex items-center gap-1">
+                    <span className="opacity-70">↩</span> {tx.debtorName}
                   </p>
                 )}
               </div>
-
-              <div className="flex shrink-0 flex-col items-end gap-1.5">
-                <p className="text-sm font-semibold text-white whitespace-nowrap">
+              <div className="text-right shrink-0">
+                <p className="text-base font-bold text-white tabular-nums">
                   {formatCurrency(tx.amount)}
                 </p>
-                {tx.remainingAmount < tx.amount && (
-                  <p className="text-xs text-amber-400 whitespace-nowrap">
-                    Pendente: {formatCurrency(tx.remainingAmount)}
+                {tx.totalInstallments && tx.totalInstallments > 1 && (
+                  <p className="text-[11px] text-gray-500">
+                    parc. {tx.installmentNumber}/{tx.totalInstallments}
                   </p>
                 )}
-                <div className="flex items-center gap-1">
-                  {tx.invoice && (
-                    <button
-                      onClick={() => setExpandedTx(isExpanded ? null : tx.id)}
-                      className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
-                    >
-                      {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                    </button>
-                  )}
-                  <Button size="sm" variant="secondary" onClick={() => openReceipt(tx)}>
-                    <DollarSign size={12} /> Receber
-                  </Button>
-                </div>
               </div>
             </div>
+
+            {/* Linha 2: meta info */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-xs text-gray-500">{formatDate(tx.date)}</span>
+              <span className="text-gray-700">·</span>
+              <span className="text-xs text-gray-500">{PAYMENT_METHOD_LABELS[tx.paymentMethod]}</span>
+              {tx.competenceDate && (
+                <>
+                  <span className="text-gray-700">·</span>
+                  <span className={cn(
+                    "text-xs font-medium",
+                    isOverdueItem ? "text-red-400" : "text-sky-400"
+                  )}>
+                    {isOverdueItem ? "⚠ Venceu " : "Prev. "}{formatDate(tx.competenceDate)}
+                  </span>
+                </>
+              )}
+              {tx.receiptStatus && (
+                <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>
+                  {RECEIPT_STATUS_LABELS[tx.receiptStatus]}
+                </Badge>
+              )}
+            </div>
+
+            {/* Linha 3: status de recebimento parcial */}
+            {isPartial && (
+              <div className="flex items-center gap-3 rounded-lg bg-emerald-500/8 border border-emerald-500/15 px-3 py-1.5">
+                <TrendingUp size={13} className="text-emerald-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-emerald-400">
+                      Recebido: {formatCurrency(tx.receivedAmount)}
+                    </span>
+                    <span className="text-xs font-semibold text-amber-400">
+                      Pendente: {formatCurrency(tx.remainingAmount)}
+                    </span>
+                  </div>
+                  {/* progress bar */}
+                  <div className="mt-1 h-1 rounded-full bg-surface-border">
+                    <div
+                      className="h-1 rounded-full bg-emerald-500"
+                      style={{ width: `${Math.min(100, (tx.receivedAmount / tx.amount) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Linha 4: botão receber — full-width no mobile */}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => openReceipt(tx)}
+              className="w-full sm:w-auto"
+            >
+              <DollarSign size={13} />
+              {isPartial ? "Registrar novo recebimento" : "Registrar recebimento"}
+            </Button>
           </div>
         </div>
-
-        {isExpanded && tx.invoice && (
-          <div className="border-t border-surface-border bg-surface px-4 py-2 text-xs text-gray-400 flex flex-wrap gap-3">
-            <span>Cartão: {tx.creditCard?.name}</span>
-            <span>Fatura: {formatMonthYear(tx.invoice.referenceMonth)}</span>
-            <span>Venc.: {formatDate(tx.invoice.dueDate)}</span>
-          </div>
-        )}
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-white">Valores a Receber</h1>
-        <p className="text-sm text-gray-500">
-          Total pendente:{" "}
-          <span className="text-amber-400 font-semibold">{formatCurrency(totalPending)}</span>
-        </p>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Valores a Receber</h1>
+          <p className="text-sm text-gray-500">
+            Total pendente:{" "}
+            <span className="font-semibold text-amber-400">{formatCurrency(totalPending)}</span>
+          </p>
+        </div>
       </div>
 
-      {/* Cards de resumo por período */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Próximo mês", value: nextMonthTotal, color: "sky",   period: "next_month" as Period },
-          { label: "Este mês",    value: thisMonthTotal, color: "blue",  period: "this_month" as Period },
-          { label: "Atrasados",   value: overdueTotal,   color: "red",   period: "overdue" as Period },
-          { label: "Total geral", value: totalPending,   color: "amber", period: "all" as Period },
-        ].map((card) => (
+      {/* Cards de resumo — 2×2 clicáveis */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        {([
+          { label: "Próx. mês", value: nextMonthTotal, period: "next_month" as Period, color: "sky",   Icon: Calendar },
+          { label: "Este mês",  value: thisMonthTotal, period: "this_month" as Period, color: "blue",  Icon: Clock },
+          { label: "Atrasados", value: overdueTotal,   period: "overdue" as Period,    color: "red",   Icon: TrendingDown },
+          { label: "Total",     value: totalPending,   period: "all" as Period,        color: "amber", Icon: Users },
+        ] as const).map((card) => (
           <button
             key={card.period}
             onClick={() => changePeriod(card.period)}
-            className={`rounded-xl border p-3 text-left transition-all ${
+            className={cn(
+              "rounded-xl border p-3 text-left transition-all",
               period === card.period
-                ? `border-${card.color}-500/40 bg-${card.color}-500/10`
+                ? card.color === "red"   ? "border-red-500/40 bg-red-500/10"
+                : card.color === "sky"   ? "border-sky-500/40 bg-sky-500/10"
+                : card.color === "blue"  ? "border-blue-500/40 bg-blue-500/10"
+                : "border-amber-500/40 bg-amber-500/10"
                 : "border-surface-border bg-surface-card hover:border-surface-hover"
-            }`}
+            )}
           >
-            <p className="text-xs text-gray-500">{card.label}</p>
-            <p className={`mt-1 text-base font-bold ${
+            <div className="flex items-center gap-1.5 mb-1">
+              <card.Icon size={12} className={
+                card.color === "red" ? "text-red-400"
+                : card.color === "sky" ? "text-sky-400"
+                : card.color === "blue" ? "text-blue-400"
+                : "text-amber-400"
+              } />
+              <p className="text-[11px] font-medium text-gray-500">{card.label}</p>
+            </div>
+            <p className={cn(
+              "text-base font-bold tabular-nums",
               card.color === "red" && card.value > 0 ? "text-red-400"
               : card.color === "sky" ? "text-sky-400"
               : card.color === "blue" ? "text-blue-400"
               : "text-amber-400"
-            }`}>
+            )}>
               {formatCurrency(card.value)}
             </p>
           </button>
         ))}
       </div>
 
-      {/* Tabs de período + controles de visualização */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
+      {/* Tabs de período com scroll horizontal */}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           {PERIOD_TABS.map((tab) => (
             <button
               key={tab.value}
               onClick={() => changePeriod(tab.value)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                 period === tab.value
                   ? "bg-sky-600 text-white"
                   : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
-              }`}
+              )}
             >
-              {tab.icon} {tab.label}
+              {tab.icon}
+              <span className="hidden xs:inline">{tab.label}</span>
+              <span className="xs:hidden">{tab.shortLabel}</span>
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Toggle de visualização */}
-        <div className="flex rounded-lg border border-surface-border overflow-hidden">
+      {/* Barra de busca + toggle de visualização */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Filtrar por pessoa ou descrição…"
+            value={debtorFilter}
+            onChange={(e) => setDebtorFilter(e.target.value)}
+            className="w-full rounded-lg border border-surface-border bg-surface-card py-2 pl-8 pr-8 text-sm text-white placeholder-gray-500 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
+          />
+          {debtorFilter && (
+            <button
+              onClick={() => setDebtorFilter("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Toggle Lista / Por pessoa */}
+        <div className="flex rounded-lg border border-surface-border bg-surface-card overflow-hidden shrink-0">
           <button
             onClick={() => setViewMode("list")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${
-              viewMode === "list"
-                ? "bg-surface-hover text-white"
-                : "bg-surface-card text-gray-400 hover:text-white"
-            }`}
+            title="Lista"
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 text-sm transition-colors",
+              viewMode === "list" ? "bg-surface-hover text-white" : "text-gray-400 hover:text-white"
+            )}
           >
-            <List size={14} /> Lista
+            <List size={15} />
+            <span className="hidden sm:inline text-xs font-medium">Lista</span>
           </button>
           <button
             onClick={() => setViewMode("by_person")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-surface-border ${
-              viewMode === "by_person"
-                ? "bg-surface-hover text-white"
-                : "bg-surface-card text-gray-400 hover:text-white"
-            }`}
+            title="Por pessoa"
+            className={cn(
+              "flex items-center gap-1.5 border-l border-surface-border px-3 py-2 text-sm transition-colors",
+              viewMode === "by_person" ? "bg-surface-hover text-white" : "text-gray-400 hover:text-white"
+            )}
           >
-            <UserCheck size={14} /> Por pessoa
+            <UserCheck size={15} />
+            <span className="hidden sm:inline text-xs font-medium">Por pessoa</span>
           </button>
         </div>
-      </div>
-
-      {/* Filtro por nome */}
-      <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-        <input
-          type="text"
-          placeholder={
-            viewMode === "by_person"
-              ? "Filtrar por pessoa ou descrição…"
-              : "Filtrar por devedor ou descrição…"
-          }
-          value={debtorFilter}
-          onChange={(e) => setDebtorFilter(e.target.value)}
-          className="w-full rounded-lg border border-surface-border bg-surface-card py-2 pl-8 pr-8 text-sm text-white placeholder-gray-500 outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/20"
-        />
-        {debtorFilter && (
-          <button
-            onClick={() => setDebtorFilter("")}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-          >
-            <X size={14} />
-          </button>
-        )}
       </div>
 
       {/* Barra de ação em lote */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
-          <div>
-            <p className="text-sm font-medium text-white">
-              {selected.size} selecionado(s)
-            </p>
-            <p className="text-xs text-gray-400">
-              Total: <span className="text-emerald-400 font-semibold">{formatCurrency(selectedAmount)}</span>
-            </p>
-          </div>
-          <div className="flex gap-2">
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-white">{selected.size} selecionado(s)</p>
+              <p className="text-xs text-gray-400">
+                Total: <span className="font-semibold text-emerald-400">{formatCurrency(selectedAmount)}</span>
+              </p>
+            </div>
             <Button variant="secondary" size="sm" onClick={() => setSelected(new Set())}>
               Limpar
             </Button>
-            <Button size="sm" onClick={() => openBulk()}>
-              <DollarSign size={14} /> Receber todos
-            </Button>
           </div>
+          <Button size="sm" onClick={() => openBulk()} className="w-full">
+            <DollarSign size={14} /> Receber todos selecionados
+          </Button>
         </div>
       )}
 
-      {/* ── VISUALIZAÇÃO LISTA ──────────────────────────────────────────────── */}
+      {/* ── VISUALIZAÇÃO LISTA ────────────────────────────────────────────────── */}
       {viewMode === "list" && (
-        <>
-          {loading ? (
-            <div className="space-y-2">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />)}
+        loading ? (
+          <div className="space-y-2">
+            {[...Array(4)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-surface-card" />)}
+          </div>
+        ) : filteredTransactions.length === 0 ? (
+          <Card className="flex flex-col items-center gap-3 py-14">
+            <Users size={36} className="text-gray-600" />
+            <p className="text-sm text-gray-500 text-center px-4">
+              {debtorFilter
+                ? `Nenhum resultado para "${debtorFilter}".`
+                : period === "overdue" ? "Nenhum valor atrasado."
+                : period === "next_month" ? "Nenhum valor previsto para o próximo mês."
+                : period === "this_month" ? "Nenhum valor previsto para este mês."
+                : "Nenhum valor a receber pendente."}
+            </p>
+          </Card>
+        ) : (
+          <Card padding="none" className="overflow-hidden">
+            {/* Cabeçalho com seleção geral */}
+            <div className="flex items-center gap-3 border-b border-surface-border px-4 py-3 bg-surface-card/50">
+              <button onClick={toggleAll} className="text-gray-400 hover:text-white transition-colors shrink-0">
+                {allSelected ? <CheckSquare size={18} className="text-sky-400" /> : <Square size={18} />}
+              </button>
+              <span className="text-xs text-gray-500 flex-1">
+                {filteredTransactions.length} lançamento(s)
+              </span>
+              <span className="text-xs font-semibold text-amber-400">
+                {formatCurrency(filteredTransactions.reduce((s, t) => s + t.remainingAmount, 0))} pendente
+              </span>
             </div>
-          ) : filteredTransactions.length === 0 ? (
-            <Card className="flex flex-col items-center gap-3 py-16">
-              <Users size={40} className="text-gray-600" />
-              <p className="text-sm text-gray-500">
-                {debtorFilter
-                  ? `Nenhum resultado para "${debtorFilter}".`
-                  : period === "next_month" ? "Nenhum valor previsto para o próximo mês."
-                  : period === "this_month" ? "Nenhum valor previsto para este mês."
-                  : period === "overdue" ? "Nenhum valor atrasado."
-                  : "Nenhum valor a receber pendente."}
-              </p>
-            </Card>
-          ) : (
-            <Card padding="none" className="overflow-hidden">
-              <div className="flex items-center gap-3 border-b border-surface-border px-4 py-3">
-                <button onClick={toggleAll} className="text-gray-400 hover:text-white transition-colors shrink-0">
-                  {allSelected ? <CheckSquare size={18} className="text-sky-400" /> : <Square size={18} />}
-                </button>
-                <span className="text-xs font-medium text-gray-500 flex-1">
-                  {filteredTransactions.length} lançamento(s) · {formatCurrency(filteredTransactions.reduce((s, t) => s + t.remainingAmount, 0))} pendente
-                </span>
-              </div>
-              <div className="divide-y divide-surface-border">
-                {filteredTransactions.map(renderTxRow)}
-              </div>
-            </Card>
-          )}
-        </>
+            <div className="divide-y divide-surface-border/60">
+              {filteredTransactions.map(renderTxRow)}
+            </div>
+          </Card>
+        )
       )}
 
-      {/* ── VISUALIZAÇÃO POR PESSOA ─────────────────────────────────────────── */}
+      {/* ── VISUALIZAÇÃO POR PESSOA ───────────────────────────────────────────── */}
       {viewMode === "by_person" && (
-        <>
-          {loading ? (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-card" />)}
-            </div>
-          ) : groupedByPerson.size === 0 ? (
-            <Card className="flex flex-col items-center gap-3 py-16">
-              <UserCheck size={40} className="text-gray-600" />
-              <p className="text-sm text-gray-500">
-                {debtorFilter ? `Nenhum resultado para "${debtorFilter}".` : "Nenhum valor a receber pendente."}
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {[...groupedByPerson.entries()].map(([key, txs]) => {
-                const personLabel = key === NO_DEBTOR_KEY ? "Sem devedor" : key;
-                const personPending = txs.reduce((s, t) => s + t.remainingAmount, 0);
-                const personTotal = txs.reduce((s, t) => s + t.amount, 0);
-                const personSelected = txs.every((tx) => selected.has(tx.id));
-                const personPartial = txs.some((tx) => selected.has(tx.id)) && !personSelected;
-                const isExpanded = expandedPerson === key;
+        loading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-surface-card" />)}
+          </div>
+        ) : groupedByPerson.size === 0 ? (
+          <Card className="flex flex-col items-center gap-3 py-14">
+            <UserCheck size={36} className="text-gray-600" />
+            <p className="text-sm text-gray-500">
+              {debtorFilter ? `Nenhum resultado para "${debtorFilter}".` : "Nenhum valor a receber pendente."}
+            </p>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {[...groupedByPerson.entries()].map(([key, txs]) => {
+              const personLabel = key === NO_DEBTOR_KEY ? "Sem devedor" : key;
+              const personPending = txs.reduce((s, t) => s + t.remainingAmount, 0);
+              const personTotal = txs.reduce((s, t) => s + t.amount, 0);
+              const personSelected = txs.every((tx) => selected.has(tx.id));
+              const personPartial = txs.some((tx) => selected.has(tx.id)) && !personSelected;
+              const isExpanded = expandedPerson === key;
+              const paidPct = personTotal > 0 ? Math.min(100, ((personTotal - personPending) / personTotal) * 100) : 0;
 
-                return (
-                  <Card key={key} padding="none" className="overflow-hidden">
-                    {/* Cabeçalho da pessoa */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <button
-                        onClick={() => togglePerson(key)}
+              return (
+                <Card key={key} padding="none" className="overflow-hidden">
+                  {/* Cabeçalho da pessoa */}
+                  <button
+                    className="w-full text-left px-4 py-4 hover:bg-surface-hover/30 transition-colors"
+                    onClick={() => setExpandedPerson(isExpanded ? null : key)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Checkbox da pessoa */}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); togglePerson(key); }}
+                        onKeyDown={(e) => e.key === "Enter" && togglePerson(key)}
                         className="shrink-0 text-gray-400 hover:text-sky-400 transition-colors"
                       >
                         {personSelected
@@ -594,76 +598,115 @@ export function ReceivablesPage() {
                           : personPartial
                           ? <CheckSquare size={18} className="text-sky-400/50" />
                           : <Square size={18} />}
-                      </button>
+                      </span>
 
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
-                        <Users size={16} />
+                      {/* Avatar */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+                        <span className="text-sm font-bold">
+                          {personLabel === "Sem devedor" ? "?" : personLabel.charAt(0).toUpperCase()}
+                        </span>
                       </div>
 
+                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white truncate">{personLabel}</p>
-                        <p className="text-xs text-gray-500">
-                          {txs.length} lançamento(s) · total {formatCurrency(personTotal)}
-                        </p>
+                        <p className="text-xs text-gray-500">{txs.length} lançamento(s)</p>
+                        {/* Mini progress */}
+                        {paidPct > 0 && (
+                          <div className="mt-1.5 h-1 rounded-full bg-surface-border w-24">
+                            <div className="h-1 rounded-full bg-emerald-500" style={{ width: `${paidPct}%` }} />
+                          </div>
+                        )}
                       </div>
 
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-amber-400 whitespace-nowrap">
+                      {/* Valor + chevron */}
+                      <div className="text-right shrink-0 flex items-center gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-amber-400 tabular-nums">
                             {formatCurrency(personPending)}
                           </p>
-                          <p className="text-xs text-gray-500">pendente</p>
+                          <p className="text-[11px] text-gray-500">pendente</p>
                         </div>
+                        {isExpanded ? <ChevronUp size={15} className="text-gray-400" /> : <ChevronDown size={15} className="text-gray-400" />}
+                      </div>
+                    </div>
+                  </button>
 
+                  {/* Ações da pessoa (sempre visíveis no collapsed) */}
+                  {!isExpanded && (
+                    <div className="px-4 pb-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => openBulkForPerson(key)}
+                      >
+                        <DollarSign size={12} /> Receber tudo de {personLabel}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Lançamentos expandidos */}
+                  {isExpanded && (
+                    <>
+                      <div className="border-t border-surface-border divide-y divide-surface-border/60">
+                        {txs.map(renderTxRow)}
+                      </div>
+                      <div className="border-t border-surface-border px-4 py-3">
                         <Button
                           size="sm"
                           onClick={() => openBulkForPerson(key)}
-                          title={`Receber tudo de ${personLabel}`}
+                          className="w-full"
                         >
-                          <DollarSign size={12} /> Receber tudo
+                          <DollarSign size={13} /> Receber todos de {personLabel}
                         </Button>
-
-                        <button
-                          onClick={() => setExpandedPerson(isExpanded ? null : key)}
-                          className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
-                        >
-                          {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                        </button>
                       </div>
-                    </div>
-
-                    {/* Lançamentos da pessoa (expansível) */}
-                    {isExpanded && (
-                      <div className="border-t border-surface-border divide-y divide-surface-border">
-                        {txs.map(renderTxRow)}
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
+                    </>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+        )
       )}
 
       {/* Modal — Registrar recebimento individual */}
       <Modal open={!!receivingTx} onClose={() => setReceivingTx(null)} title="Registrar recebimento" size="sm">
         {receivingTx && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-surface p-3 text-sm space-y-1">
-              <p className="font-medium text-white">{receivingTx.description}</p>
-              {receivingTx.debtorName && (
-                <p className="text-gray-500">Devedor: <span className="text-white">{receivingTx.debtorName}</span></p>
-              )}
-              {receivingTx.competenceDate && (
-                <p className="text-gray-500">Previsão: <span className="text-sky-400">{formatDate(receivingTx.competenceDate)}</span></p>
-              )}
+            {/* Info da transação */}
+            <div className="rounded-xl bg-surface border border-surface-border p-4 space-y-2">
+              <p className="text-sm font-semibold text-white">{receivingTx.description}</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {receivingTx.debtorName && (
+                  <div>
+                    <p className="text-gray-500">Devedor</p>
+                    <p className="font-medium text-amber-400">{receivingTx.debtorName}</p>
+                  </div>
+                )}
+                {receivingTx.competenceDate && (
+                  <div>
+                    <p className="text-gray-500">Previsão</p>
+                    <p className="font-medium text-sky-400">{formatDate(receivingTx.competenceDate)}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-gray-500">Valor total</p>
+                  <p className="font-semibold text-white">{formatCurrency(receivingTx.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Pendente</p>
+                  <p className="font-bold text-amber-400">{formatCurrency(receivingTx.remainingAmount)}</p>
+                </div>
+              </div>
               {receivingTx.receivedAmount > 0 && (
-                <p className="text-gray-500">Já recebido: <span className="text-emerald-400">{formatCurrency(receivingTx.receivedAmount)}</span></p>
+                <p className="text-xs text-emerald-400">
+                  Já recebido: {formatCurrency(receivingTx.receivedAmount)}
+                </p>
               )}
-              <p className="text-gray-500">Pendente: <span className="text-amber-400 font-semibold">{formatCurrency(receivingTx.remainingAmount)}</span></p>
             </div>
-            <form onSubmit={receiptForm.handleSubmit(onReceiptSubmit)} className="space-y-4">
+
+            <form onSubmit={receiptForm.handleSubmit(onReceiptSubmit)} className="space-y-3">
               <Input label="Valor recebido (R$)" type="number" step="0.01"
                 error={receiptForm.formState.errors.amountReceived?.message}
                 {...receiptForm.register("amountReceived")} />
@@ -674,9 +717,13 @@ export function ReceivablesPage() {
                 error={receiptForm.formState.errors.destinationAccountId?.message}
                 {...receiptForm.register("destinationAccountId")} />
               <Input label="Observação (opcional)" {...receiptForm.register("notes")} />
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="secondary" onClick={() => setReceivingTx(null)}>Cancelar</Button>
-                <Button type="submit" loading={registering}>Registrar</Button>
+              <div className="flex gap-3 pt-1">
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => setReceivingTx(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1" loading={registering}>
+                  Registrar
+                </Button>
               </div>
             </form>
           </div>
@@ -684,25 +731,36 @@ export function ReceivablesPage() {
       </Modal>
 
       {/* Modal — Receber em lote */}
-      <Modal open={bulkModalOpen} onClose={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }} title="Receber em lote" size="sm">
+      <Modal
+        open={bulkModalOpen}
+        onClose={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}
+        title="Receber em lote"
+        size="sm"
+      >
         <div className="space-y-4">
-          <div className="rounded-lg bg-surface p-3 text-sm space-y-1">
+          <div className="rounded-xl bg-surface border border-surface-border p-4 space-y-2">
             {bulkPersonLabel && (
-              <p className="font-medium text-white">
-                Devedor: <span className="text-amber-400">{bulkPersonLabel}</span>
-              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Devedor:</span>
+                <span className="text-sm font-semibold text-amber-400">{bulkPersonLabel}</span>
+              </div>
             )}
-            <p className="text-gray-500">
-              Serão registrados <span className="text-white font-semibold">{selected.size} recebimento(s)</span>
-            </p>
-            <p className="text-gray-500">
-              Valor total: <span className="text-emerald-400 font-semibold">{formatCurrency(selectedAmount)}</span>
-            </p>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-gray-500">Recebimentos</p>
+                <p className="text-lg font-bold text-white">{selected.size}</p>
+              </div>
+              <div>
+                <p className="text-gray-500">Valor total</p>
+                <p className="text-lg font-bold text-emerald-400">{formatCurrency(selectedAmount)}</p>
+              </div>
+            </div>
             <p className="text-xs text-gray-600">
               Cada lançamento será recebido pelo seu saldo pendente integral.
             </p>
           </div>
-          <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-4">
+
+          <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-3">
             <Input label="Data do recebimento" type="date"
               error={bulkForm.formState.errors.receiptDate?.message}
               {...bulkForm.register("receiptDate")} />
@@ -710,10 +768,15 @@ export function ReceivablesPage() {
               error={bulkForm.formState.errors.destinationAccountId?.message}
               {...bulkForm.register("destinationAccountId")} />
             <Input label="Observação (opcional)" {...bulkForm.register("notes")} />
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}>Cancelar</Button>
-              <Button type="submit" loading={bulkLoading}>
-                <DollarSign size={14} /> Confirmar recebimento
+            <div className="flex gap-3 pt-1">
+              <Button
+                type="button" variant="secondary" className="flex-1"
+                onClick={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" className="flex-1" loading={bulkLoading}>
+                <DollarSign size={14} /> Confirmar
               </Button>
             </div>
           </form>
