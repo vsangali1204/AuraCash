@@ -13,11 +13,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/graphql": {
-        target: "http://localhost:8021",
+        target: "http://localhost:8020",
         changeOrigin: true,
       },
       "/health": {
-        target: "http://localhost:8021",
+        target: "http://localhost:8020",
         changeOrigin: true,
       },
     },

@@ -25,7 +25,7 @@ import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CATEGORIES_QUERY } from "@/graphql/queries/categories";
 import { CREDIT_CARDS_QUERY } from "@/graphql/queries/creditCards";
 import {
-  formatCurrency, formatDate, formatMonthYear,
+  formatCurrency, formatDate, formatMonthYear, roundMoney,
   TRANSACTION_TYPE_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, Category, CreditCard, Transaction } from "@/types";
@@ -291,8 +291,8 @@ export function TransactionsPage() {
   }, {});
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
-  const totalIncome = transactions.filter(t => t.transactionType === "income").reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter(t => t.transactionType === "expense").reduce((s, t) => s + t.amount, 0);
+  const totalIncome = roundMoney(transactions.filter(t => t.transactionType === "income").reduce((s, t) => roundMoney(s + t.amount), 0));
+  const totalExpense = roundMoney(transactions.filter(t => t.transactionType === "expense").reduce((s, t) => roundMoney(s + t.amount), 0));
 
   // Ref callback para o campo de descrição
   const descRegister = register("description");
@@ -327,8 +327,8 @@ export function TransactionsPage() {
           <div className="flex gap-4 text-xs">
             <span className="text-emerald-400">↑ {formatCurrency(totalIncome)}</span>
             <span className="text-red-400">↓ {formatCurrency(totalExpense)}</span>
-            <span className={totalIncome - totalExpense >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-              = {formatCurrency(totalIncome - totalExpense)}
+            <span className={roundMoney(totalIncome - totalExpense) >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
+              = {formatCurrency(roundMoney(totalIncome - totalExpense))}
             </span>
           </div>
         </div>
@@ -383,11 +383,11 @@ export function TransactionsPage() {
       ) : (
         <div className="space-y-6">
           {sortedDates.map((dateKey) => {
-            const dayTotal = grouped[dateKey].reduce((sum, t) => {
-              if (t.transactionType === "income") return sum + t.amount;
-              if (t.transactionType === "expense") return sum - t.amount;
+            const dayTotal = roundMoney(grouped[dateKey].reduce((sum, t) => {
+              if (t.transactionType === "income") return roundMoney(sum + t.amount);
+              if (t.transactionType === "expense") return roundMoney(sum - t.amount);
               return sum;
-            }, 0);
+            }, 0));
 
             return (
               <div key={dateKey}>
@@ -466,13 +466,13 @@ export function TransactionsPage() {
                               </Badge>
                               <button
                                 onClick={() => openEdit(t)}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                               >
                                 <Pencil size={13} />
                               </button>
                               <button
                                 onClick={() => setDeleteId(t.id)}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                className="rounded-lg p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                               >
                                 <Trash2 size={13} />
                               </button>
@@ -512,13 +512,13 @@ export function TransactionsPage() {
             }}
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
             <Input label="Valor (R$)" type="number" step="0.01" placeholder="0,00" error={errors.amount?.message} {...register("amount")} />
             <Input label="Data" type="date" error={errors.date?.message} {...register("date")} />
           </div>
 
           {/* Tipo + método */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
             <Select
               label="Tipo"
               options={TRANSACTION_TYPE_OPTIONS}
@@ -537,19 +537,19 @@ export function TransactionsPage() {
 
           {/* Campos condicionais */}
           {isCreditPayment ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <Select label="Cartão" options={cardOptions} placeholder="Selecione" error={errors.creditCardId?.message} {...register("creditCardId")} />
               {!editing && (
                 <Input label="Parcelas" type="number" min={1} max={48} error={errors.totalInstallments?.message} {...register("totalInstallments")} />
               )}
             </div>
           ) : isTransfer ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <Select label="Origem" options={accountOptions} placeholder="Selecione" error={errors.accountId?.message} {...register("accountId")} />
               <Select label="Destino" options={accountOptions} placeholder="Selecione" error={errors.transferAccountId?.message} {...register("transferAccountId")} />
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <Select label="Conta" options={accountOptions} placeholder="Conta" error={errors.accountId?.message} {...register("accountId")} />
               <Select label="Categoria" options={categoryOptions} {...register("categoryId")} />
             </div>
@@ -575,7 +575,7 @@ export function TransactionsPage() {
                 </label>
               </div>
               {isReceivable && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
                   <Input label="Devedor" placeholder="Ex: João Silva" {...register("debtorName")} />
                   <Input label="Previsão" type="date" {...register("competenceDate")} />
                 </div>

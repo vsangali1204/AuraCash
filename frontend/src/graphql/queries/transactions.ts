@@ -135,6 +135,27 @@ export const DELETE_TRANSACTION_MUTATION = gql`
   }
 `;
 
+export const INSTALLMENTS_BY_MONTH_QUERY = gql`
+  query InstallmentsByMonth {
+    installmentsByMonth {
+      month
+      total
+      count
+    }
+  }
+`;
+
+export const PAYMENT_METHOD_SUMMARY_QUERY = gql`
+  query PaymentMethodSummary($year: Int!, $month: Int!) {
+    paymentMethodSummary(year: $year, month: $month) {
+      paymentMethod
+      total
+      count
+      percentage
+    }
+  }
+`;
+
 export const PENDING_RECURRENCES_QUERY = gql`
   ${TRANSACTION_FIELDS}
   query PendingRecurrences {

@@ -144,3 +144,16 @@ export interface CalendarEvent {
   amount?: number | null;
   color: string;
 }
+
+export interface InstallmentMonthSummary {
+  month: string;
+  total: number;
+  count: number;
+}
+
+export interface PaymentMethodSummary {
+  paymentMethod: string;
+  total: number;
+  count: number;
+  percentage: number;
+}

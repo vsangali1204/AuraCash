@@ -7,7 +7,7 @@ from typing import Optional
 Date = date
 
 import strawberry
-from django.db.models import Case, DecimalField, F, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, F, Sum, Value, When
 from django.db.models.functions import Coalesce, ExtractMonth, ExtractYear
 
 from shared.auth import require_auth
@@ -95,7 +95,7 @@ def map_transaction(t: Transaction) -> TransactionType:
     return TransactionType(
         id=strawberry.ID(str(t.id)),
         description=t.description,
-        amount=float(t.amount),
+        amount=round(float(t.amount), 2),
         transaction_type=t.transaction_type,
         payment_method=t.payment_method,
         date=t.date,
@@ -110,8 +110,8 @@ def map_transaction(t: Transaction) -> TransactionType:
         is_receivable=t.is_receivable,
         debtor_name=t.debtor_name,
         receipt_status=t.receipt_status,
-        received_amount=float(t.received_amount),
-        remaining_amount=float(t.remaining_amount),
+        received_amount=round(float(t.received_amount), 2),
+        remaining_amount=round(float(t.remaining_amount), 2),
         is_pending_recurrence=t.is_pending_recurrence,
         notes=t.notes,
         created_at=t.created_at,
@@ -161,6 +161,21 @@ class CalendarEvent:
     title: str
     amount: Optional[float]
     color: str
+
+
+@strawberry.type
+class InstallmentMonthSummary:
+    month: str
+    total: float
+    count: int
+
+
+@strawberry.type
+class PaymentMethodSummary:
+    payment_method: str
+    total: float
+    count: int
+    percentage: float
 
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
@@ -605,6 +620,64 @@ class TransactionQuery:
 
         events.sort(key=lambda e: e.date)
         return events
+
+    @strawberry.field
+    def installments_by_month(self, info: strawberry.types.Info) -> list["InstallmentMonthSummary"]:
+        user = require_auth(info)
+        today = date.today()
+
+        rows = (
+            Transaction.objects.filter(
+                user=user,
+                total_installments__gt=1,
+                parent_transaction__isnull=False,
+                competence_date__gt=today,
+            )
+            .values(year=ExtractYear("competence_date"), month_num=ExtractMonth("competence_date"))
+            .annotate(total=Sum("amount"), count=Count("id"))
+            .order_by("year", "month_num")
+        )
+
+        return [
+            InstallmentMonthSummary(
+                month=f"{row['year']}-{str(row['month_num']).zfill(2)}",
+                total=round(float(row["total"]), 2),
+                count=row["count"],
+            )
+            for row in rows
+        ]
+
+    @strawberry.field
+    def payment_method_summary(
+        self, info: strawberry.types.Info, year: int, month: int
+    ) -> list["PaymentMethodSummary"]:
+        user = require_auth(info)
+
+        rows = (
+            Transaction.objects.filter(
+                user=user,
+                transaction_type="expense",
+                date__year=year,
+                date__month=month,
+                parent_transaction__isnull=True,
+            )
+            .values("payment_method")
+            .annotate(total=Sum("amount"), count=Count("id"))
+            .order_by("-total")
+        )
+
+        rows_list = list(rows)
+        grand_total = sum(float(r["total"]) for r in rows_list) or 1
+
+        return [
+            PaymentMethodSummary(
+                payment_method=r["payment_method"],
+                total=round(float(r["total"]), 2),
+                count=r["count"],
+                percentage=round(float(r["total"]) / grand_total * 100, 1),
+            )
+            for r in rows_list
+        ]
 
 
 # ── Mutations ─────────────────────────────────────────────────────────────────

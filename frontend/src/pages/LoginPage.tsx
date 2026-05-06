@@ -12,6 +12,7 @@ import { z } from "zod";
 const schema = z.object({
   email: z.string().email("E-mail inválido"),
   password: z.string().min(1, "Senha obrigatória"),
+  rememberMe: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -23,13 +24,16 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { rememberMe: false } });
+
+  const rememberMe = watch("rememberMe");
 
   const [loginMutation, { loading }] = useMutation(LOGIN_MUTATION, {
     onCompleted: (data) => {
       const { accessToken, refreshToken, user } = data.login;
-      login(accessToken, refreshToken, user);
+      login(accessToken, refreshToken, user, rememberMe);
       navigate("/");
     },
     onError: (error) => {
@@ -38,7 +42,7 @@ export function LoginPage() {
   });
 
   const onSubmit = (data: FormData) => {
-    loginMutation({ variables: { input: data } });
+    loginMutation({ variables: { input: { email: data.email, password: data.password } } });
   };
 
   return (
@@ -72,6 +76,23 @@ export function LoginPage() {
             error={errors.password?.message}
             {...register("password")}
           />
+
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-surface-border bg-surface accent-sky-500"
+                {...register("rememberMe")}
+              />
+              <span className="text-sm text-gray-400">Manter conectado</span>
+            </label>
+            <Link
+              to="/forgot-password"
+              className="text-sm text-sky-400 hover:text-sky-300 transition-colors"
+            >
+              Esqueceu a senha?
+            </Link>
+          </div>
 
           <Button type="submit" className="w-full" loading={loading} size="lg">
             Entrar

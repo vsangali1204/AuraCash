@@ -74,6 +74,7 @@ else:
             "PASSWORD": config("DB_PASSWORD", default="auracash123"),
             "HOST": config("DB_HOST", default="localhost"),
             "PORT": config("DB_PORT", default="5432"),
+            "OPTIONS": {"sslmode": config("DB_SSLMODE", default="disable")},
         }
     }
 
@@ -110,6 +111,19 @@ CORS_ALLOW_CREDENTIALS = True
 JWT_SECRET_KEY = SECRET_KEY
 JWT_ACCESS_TOKEN_LIFETIME_MINUTES = 15
 JWT_REFRESH_TOKEN_LIFETIME_DAYS = 7
+
+# ─── E-mail ───────────────────────────────────────────────────────────────────
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@auracash.app")
+PASSWORD_RESET_TIMEOUT = 3600  # 1 hora
+
+# ─── Frontend URL (para links de e-mail) ──────────────────────────────────────
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173").split(",")[0]
 
 # ─── Celery ───────────────────────────────────────────────────────────────────
 CELERY_BROKER_URL = config("REDIS_URL", default="redis://localhost:6379/0")

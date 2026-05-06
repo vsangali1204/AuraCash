@@ -1,8 +1,12 @@
+import base64
 from datetime import datetime
 from typing import Optional
 
 import strawberry
+from django.conf import settings
 from django.contrib.auth import authenticate
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
 
 from shared.auth import generate_tokens, decode_token, require_auth
 from .models import User
@@ -103,3 +107,43 @@ class UserMutation:
             refresh_token=tokens["refresh_token"],
             user=map_user(user),
         )
+
+    @strawberry.mutation
+    def request_password_reset(self, email: str) -> bool:
+        user = User.objects.filter(email=email, is_active=True).first()
+        if not user:
+            # Retorna True mesmo se o e-mail não existir para não revelar cadastros
+            return True
+
+        uid = base64.urlsafe_b64encode(str(user.pk).encode()).decode()
+        token = default_token_generator.make_token(user)
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+
+        send_mail(
+            subject="Redefinição de senha — AuraCash",
+            message=(
+                f"Olá, {user.name}!\n\n"
+                f"Clique no link abaixo para redefinir sua senha (válido por 1 hora):\n\n"
+                f"{reset_link}\n\n"
+                f"Se você não solicitou isso, ignore este e-mail."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=True,
+        )
+        return True
+
+    @strawberry.mutation
+    def reset_password(self, uid: str, token: str, new_password: str) -> bool:
+        try:
+            user_pk = base64.urlsafe_b64decode(uid.encode()).decode()
+            user = User.objects.get(pk=user_pk, is_active=True)
+        except Exception:
+            raise Exception("Link inválido ou expirado.")
+
+        if not default_token_generator.check_token(user, token):
+            raise Exception("Link inválido ou expirado.")
+
+        user.set_password(new_password)
+        user.save()
+        return True

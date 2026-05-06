@@ -8,8 +8,10 @@ import { useAuthStore } from "@/store/authStore";
 import { MainLayout } from "@/components/Layout/MainLayout";
 
 // Páginas carregadas sob demanda — cada rota vira um chunk separado
-const LoginPage       = lazy(() => import("@/pages/LoginPage").then(m => ({ default: m.LoginPage })));
-const RegisterPage    = lazy(() => import("@/pages/RegisterPage").then(m => ({ default: m.RegisterPage })));
+const LoginPage           = lazy(() => import("@/pages/LoginPage").then(m => ({ default: m.LoginPage })));
+const RegisterPage        = lazy(() => import("@/pages/RegisterPage").then(m => ({ default: m.RegisterPage })));
+const ForgotPasswordPage  = lazy(() => import("@/pages/ForgotPasswordPage").then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage   = lazy(() => import("@/pages/ResetPasswordPage").then(m => ({ default: m.ResetPasswordPage })));
 const DashboardPage   = lazy(() => import("@/pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
 const AccountsPage    = lazy(() => import("@/pages/AccountsPage").then(m => ({ default: m.AccountsPage })));
 const CategoriesPage  = lazy(() => import("@/pages/CategoriesPage").then(m => ({ default: m.CategoriesPage })));
@@ -77,8 +79,10 @@ export default function App() {
         />
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/login"    element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+            <Route path="/login"           element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/register"        element={<PublicRoute><RegisterPage /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+            <Route path="/reset-password"  element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/"             element={<DashboardPage />} />
               <Route path="/accounts"     element={<AccountsPage />} />

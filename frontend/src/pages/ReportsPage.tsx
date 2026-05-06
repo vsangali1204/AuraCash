@@ -11,14 +11,24 @@ import {
 } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
-import { DASHBOARD_SUMMARY_QUERY } from "@/graphql/queries/transactions";
+import { DASHBOARD_SUMMARY_QUERY, PAYMENT_METHOD_SUMMARY_QUERY } from "@/graphql/queries/transactions";
 import { CREDIT_CARDS_QUERY, INVOICES_QUERY } from "@/graphql/queries/creditCards";
 import { RECEIVABLE_SUMMARY_QUERY } from "@/graphql/queries/receivables";
-import { formatCurrency, formatMonthYear } from "@/lib/utils";
-import type { CreditCard as CreditCardType, DashboardSummary, Invoice, ReceivableSummary } from "@/types";
+import { formatCurrency, formatMonthYear, roundMoney } from "@/lib/utils";
+import type { CreditCard as CreditCardType, DashboardSummary, Invoice, PaymentMethodSummary, ReceivableSummary } from "@/types";
 
 const now = new Date();
 const MONTHS_LABEL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+const PAYMENT_METHOD_COLORS = ["#0ea5e9", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#6b7280"];
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  debit: "Débito",
+  pix: "PIX",
+  cash: "Dinheiro",
+  transfer: "Transferência",
+  credit: "Crédito",
+};
 
 const TOOLTIP_STYLE = {
   contentStyle: { background: "#1a1a1a", border: "1px solid #2a2a2a", borderRadius: "8px", fontSize: "12px" },
@@ -50,6 +60,9 @@ export function ReportsPage() {
     skip: !selectedCardId,
   });
   const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
+  const { data: paymentMethodData } = useQuery<{ paymentMethodSummary: PaymentMethodSummary[] }>(
+    PAYMENT_METHOD_SUMMARY_QUERY, { variables: { year, month } }
+  );
 
   const summary = summaryData?.dashboardSummary;
   const cards = cardsData?.creditCards ?? [];
@@ -59,7 +72,8 @@ export function ReportsPage() {
   const balanceHistory = summary?.balanceHistory ?? [];
   const expenseByCategory = summary?.expenseByCategory ?? [];
   const incomeByCategory = summary?.incomeByCategory ?? [];
-  const totalReceivable = receivables.reduce((s, r) => s + r.pendingAmount, 0);
+  const totalReceivable = roundMoney(receivables.reduce((s, r) => roundMoney(s + r.pendingAmount), 0));
+  const paymentMethods = paymentMethodData?.paymentMethodSummary ?? [];
 
   // Computed stats from balance history
   const stats = useMemo(() => {
@@ -96,7 +110,7 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-white">Relatórios</h1>
           <p className="text-sm text-gray-500">Análise financeira detalhada</p>
@@ -108,11 +122,11 @@ export function ReportsPage() {
           >
             <ChevronLeft size={16} />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2">
             <select
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
-              className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+              className="flex-1 rounded-lg border border-surface-border bg-surface px-2 py-2 text-sm text-white focus:border-sky-500 focus:outline-none sm:flex-none sm:px-3"
             >
               {MONTHS_LABEL.map((m, i) => (
                 <option key={i} value={i + 1}>{m}</option>
@@ -121,7 +135,7 @@ export function ReportsPage() {
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-white focus:border-sky-500 focus:outline-none"
+              className="rounded-lg border border-surface-border bg-surface px-2 py-2 text-sm text-white focus:border-sky-500 focus:outline-none sm:px-3"
             >
               {[now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -277,6 +291,56 @@ export function ReportsPage() {
           )}
         </Card>
       </div>
+
+      {/* Payment method distribution */}
+      {paymentMethods.length > 0 && (
+        <Card>
+          <h3 className="mb-4 text-sm font-semibold text-white">
+            Despesas por meio de pagamento — {MONTHS_LABEL[month - 1]}/{year}
+          </h3>
+          <div className="flex flex-col gap-6 sm:flex-row">
+            <div className="flex justify-center sm:w-48">
+              <ResponsiveContainer width={160} height={160}>
+                <PieChart>
+                  <Pie
+                    data={paymentMethods}
+                    dataKey="total"
+                    nameKey="paymentMethod"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={72}
+                    innerRadius={44}
+                  >
+                    {paymentMethods.map((_, i) => (
+                      <Cell key={i} fill={PAYMENT_METHOD_COLORS[i % PAYMENT_METHOD_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 space-y-2">
+              {paymentMethods.map((item, i) => (
+                <div key={item.paymentMethod} className="flex items-center gap-3">
+                  <div
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: PAYMENT_METHOD_COLORS[i % PAYMENT_METHOD_COLORS.length] }}
+                  />
+                  <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
+                    <span className="text-sm text-gray-300 truncate">
+                      {PAYMENT_METHOD_LABELS[item.paymentMethod] ?? item.paymentMethod}
+                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-xs text-gray-500">{item.percentage.toFixed(1)}%</span>
+                      <span className="text-sm font-medium text-white">{formatCurrency(item.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Receivables + monthly breakdown */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

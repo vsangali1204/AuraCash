@@ -5,18 +5,18 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight, Bell } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight, Bell, Layers } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PendingRecurrencesModal } from "@/components/PendingRecurrencesModal";
-import { DASHBOARD_SUMMARY_QUERY, TRANSACTIONS_QUERY, PENDING_RECURRENCES_QUERY } from "@/graphql/queries/transactions";
+import { DASHBOARD_SUMMARY_QUERY, TRANSACTIONS_QUERY, PENDING_RECURRENCES_QUERY, INSTALLMENTS_BY_MONTH_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { RECURRENCES_QUERY } from "@/graphql/queries/recurrences";
 import { RECEIVABLE_SUMMARY_QUERY } from "@/graphql/queries/receivables";
-import { formatCurrency, formatDate, formatMonthYear, TRANSACTION_TYPE_LABELS } from "@/lib/utils";
-import type { Account, DashboardSummary, Recurrence, ReceivableSummary, Transaction } from "@/types";
+import { formatCurrency, formatDate, formatMonthYear, roundMoney, TRANSACTION_TYPE_LABELS } from "@/lib/utils";
+import type { Account, DashboardSummary, InstallmentMonthSummary, Recurrence, ReceivableSummary, Transaction } from "@/types";
 
 const DASHBOARD_MONTH_KEY = "auracash-dashboard-month";
 
@@ -62,6 +62,15 @@ export function DashboardPage() {
     { variables: { year: navMonth.year, month: navMonth.month } }
   );
 
+  const prevNavMonth = navMonth.month === 1
+    ? { year: navMonth.year - 1, month: 12 }
+    : { year: navMonth.year, month: navMonth.month - 1 };
+
+  const { data: prevSummaryData } = useQuery<{ dashboardSummary: DashboardSummary }>(
+    DASHBOARD_SUMMARY_QUERY,
+    { variables: { year: prevNavMonth.year, month: prevNavMonth.month } }
+  );
+
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
   const { data: txData } = useQuery<{ transactions: Transaction[] }>(TRANSACTIONS_QUERY, {
     variables: { limit: 8, offset: 0 },
@@ -71,20 +80,30 @@ export function DashboardPage() {
   });
   const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
   const { data: pendingData } = useQuery<{ pendingRecurrences: Transaction[] }>(PENDING_RECURRENCES_QUERY);
+  const { data: installmentsData } = useQuery<{ installmentsByMonth: InstallmentMonthSummary[] }>(INSTALLMENTS_BY_MONTH_QUERY);
 
   const summary = summaryData?.dashboardSummary;
+  const prevSummary = prevSummaryData?.dashboardSummary;
+  const installmentsByMonth = installmentsData?.installmentsByMonth ?? [];
   const accounts = accountsData?.accounts ?? [];
   const transactions = txData?.transactions ?? [];
   const recurrences = (recData?.recurrences ?? []).filter((r) => r.isActive && r.nextExecutionDate);
   const receivables = receivablesData?.receivableSummary ?? [];
   const pendingRecurrences = pendingData?.pendingRecurrences ?? [];
   const pendingCount = summary?.pendingRecurrencesCount ?? pendingRecurrences.length;
-  const totalReceivable = receivables.reduce((s, r) => s + r.pendingAmount, 0);
+  const totalReceivable = roundMoney(receivables.reduce((s, r) => roundMoney(s + r.pendingAmount), 0));
 
   const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
     .toLocaleString("pt-BR", { month: "long", year: "numeric" });
   const balanceHistory = summary?.balanceHistory ?? [];
   const expenseByCategory = summary?.expenseByCategory ?? [];
+
+  function calcTrend(current: number | undefined, previous: number | undefined) {
+    if (current == null || previous == null || previous === 0) return null;
+    const pct = ((current - previous) / Math.abs(previous)) * 100;
+    if (Math.abs(pct) < 0.5) return null;
+    return { pct: Math.abs(pct), dir: pct > 0 ? "up" : "down" } as const;
+  }
 
   return (
     <div className="space-y-6">
@@ -132,9 +151,30 @@ export function DashboardPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <SummaryCard label="Saldo Total" value={summaryLoading ? null : (summary?.totalBalance ?? 0)} icon={<Wallet size={18} />} color="sky" />
-        <SummaryCard label="Receitas do mês" value={summaryLoading ? null : (summary?.monthIncome ?? 0)} icon={<TrendingUp size={18} />} color="emerald" />
-        <SummaryCard label="Despesas do mês" value={summaryLoading ? null : (summary?.monthExpense ?? 0)} icon={<TrendingDown size={18} />} color="red" />
+        <SummaryCard
+          label="Saldo Total"
+          value={summaryLoading ? null : (summary?.totalBalance ?? 0)}
+          icon={<Wallet size={18} />}
+          color="sky"
+          trend={calcTrend(summary?.totalBalance, prevSummary?.totalBalance)}
+          trendPositiveIsGood
+        />
+        <SummaryCard
+          label="Receitas do mês"
+          value={summaryLoading ? null : (summary?.monthIncome ?? 0)}
+          icon={<TrendingUp size={18} />}
+          color="emerald"
+          trend={calcTrend(summary?.monthIncome, prevSummary?.monthIncome)}
+          trendPositiveIsGood
+        />
+        <SummaryCard
+          label="Despesas do mês"
+          value={summaryLoading ? null : (summary?.monthExpense ?? 0)}
+          icon={<TrendingDown size={18} />}
+          color="red"
+          trend={calcTrend(summary?.monthExpense, prevSummary?.monthExpense)}
+          trendPositiveIsGood={false}
+        />
         <SummaryCard
           label="A Receber"
           value={summaryLoading ? null : totalReceivable}
@@ -413,18 +453,41 @@ export function DashboardPage() {
             </div>
           )}
         </Card>
+
+        {/* Parcelas futuras */}
+        {installmentsByMonth.length > 0 && (
+          <Card className="xl:col-span-3">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400">
+                <Layers size={15} />
+              </div>
+              <h2 className="text-sm font-semibold text-white">Compromissos futuros de parcelas</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+              {installmentsByMonth.slice(0, 6).map((item) => (
+                <div key={item.month} className="rounded-lg border border-surface-border bg-surface p-3">
+                  <p className="text-xs text-gray-500 capitalize">{formatMonthYear(item.month)}</p>
+                  <p className="mt-1 text-sm font-bold text-purple-300">{formatCurrency(item.total)}</p>
+                  <p className="mt-0.5 text-xs text-gray-600">{item.count} parcela{item.count !== 1 ? "s" : ""}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
 }
 
 function SummaryCard({
-  label, value, icon, color,
+  label, value, icon, color, trend, trendPositiveIsGood = true,
 }: {
   label: string;
   value: number | null;
   icon: React.ReactNode;
   color: "sky" | "emerald" | "red" | "amber";
+  trend?: { pct: number; dir: "up" | "down" } | null;
+  trendPositiveIsGood?: boolean;
 }) {
   const colorMap = {
     sky: { bg: "bg-sky-500/10", text: "text-sky-400", value: "text-sky-300" },
@@ -433,18 +496,26 @@ function SummaryCard({
     amber: { bg: "bg-amber-500/10", text: "text-amber-400", value: "text-amber-300" },
   };
   const c = colorMap[color];
+
+  const trendGood = trend ? (trendPositiveIsGood ? trend.dir === "up" : trend.dir === "down") : null;
+
   return (
     <Card>
       <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-medium text-gray-500">{label}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-gray-500 truncate">{label}</p>
           {value === null ? (
             <div className="mt-1 h-6 w-24 animate-pulse rounded bg-surface-border" />
           ) : (
             <p className={`mt-1 text-base sm:text-xl font-bold ${c.value}`}>{formatCurrency(value)}</p>
           )}
+          {trend && (
+            <p className={`mt-1 text-xs font-medium ${trendGood ? "text-emerald-400" : "text-red-400"}`}>
+              {trend.dir === "up" ? "▲" : "▼"} {trend.pct.toFixed(1)}% vs mês ant.
+            </p>
+          )}
         </div>
-        <div className={`rounded-lg p-2 ${c.bg} ${c.text}`}>{icon}</div>
+        <div className={`ml-3 shrink-0 rounded-lg p-2 ${c.bg} ${c.text}`}>{icon}</div>
       </div>
     </Card>
   );

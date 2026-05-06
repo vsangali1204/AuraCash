@@ -51,3 +51,15 @@ export const ME_QUERY = gql`
     }
   }
 `;
+
+export const REQUEST_PASSWORD_RESET_MUTATION = gql`
+  mutation RequestPasswordReset($email: String!) {
+    requestPasswordReset(email: $email)
+  }
+`;
+
+export const RESET_PASSWORD_MUTATION = gql`
+  mutation ResetPassword($uid: String!, $token: String!, $newPassword: String!) {
+    resetPassword(uid: $uid, token: $token, newPassword: $newPassword)
+  }
+`;

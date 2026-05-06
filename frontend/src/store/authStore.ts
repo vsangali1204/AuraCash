@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, StateStorage } from "zustand/middleware";
 
 interface User {
   id: string;
@@ -12,10 +12,29 @@ interface AuthState {
   refreshToken: string | null;
   user: User | null;
   isAuthenticated: boolean;
-  login: (accessToken: string, refreshToken: string, user: User) => void;
+  login: (accessToken: string, refreshToken: string, user: User, rememberMe?: boolean) => void;
   logout: () => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
 }
+
+// Persiste em localStorage quando "manter conectado" está ativo, sessionStorage caso contrário
+const dynamicStorage: StateStorage = {
+  getItem: (name) => localStorage.getItem(name) ?? sessionStorage.getItem(name),
+  setItem: (name, value) => {
+    const remember = localStorage.getItem("auracash-remember") === "true";
+    if (remember) {
+      localStorage.setItem(name, value);
+      sessionStorage.removeItem(name);
+    } else {
+      sessionStorage.setItem(name, value);
+      localStorage.removeItem(name);
+    }
+  },
+  removeItem: (name) => {
+    localStorage.removeItem(name);
+    sessionStorage.removeItem(name);
+  },
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -25,17 +44,26 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
 
-      login: (accessToken, refreshToken, user) =>
-        set({ accessToken, refreshToken, user, isAuthenticated: true }),
+      login: (accessToken, refreshToken, user, rememberMe = false) => {
+        if (rememberMe) {
+          localStorage.setItem("auracash-remember", "true");
+        } else {
+          localStorage.removeItem("auracash-remember");
+        }
+        set({ accessToken, refreshToken, user, isAuthenticated: true });
+      },
 
-      logout: () =>
-        set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false }),
+      logout: () => {
+        localStorage.removeItem("auracash-remember");
+        set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
+      },
 
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
     }),
     {
       name: "auracash-auth",
+      storage: dynamicStorage,
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

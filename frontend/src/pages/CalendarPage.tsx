@@ -7,7 +7,8 @@ import { CALENDAR_EVENTS_QUERY } from "@/graphql/queries/transactions";
 import { formatCurrency } from "@/lib/utils";
 import type { CalendarEvent } from "@/types";
 
-const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const WEEKDAYS = ["D", "S", "T", "Q", "Q", "S", "S"];
+const WEEKDAYS_FULL = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -87,8 +88,11 @@ export function CalendarPage() {
 
           {/* Weekday headers */}
           <div className="mb-2 grid grid-cols-7 gap-1">
-            {WEEKDAYS.map((d) => (
-              <div key={d} className="text-center text-xs font-medium text-gray-500 py-1">{d}</div>
+            {WEEKDAYS.map((d, i) => (
+              <div key={i} className="text-center text-xs font-medium text-gray-500 py-1">
+                <span className="sm:hidden">{d}</span>
+                <span className="hidden sm:inline">{WEEKDAYS_FULL[i]}</span>
+              </div>
             ))}
           </div>
 
@@ -109,7 +113,7 @@ export function CalendarPage() {
                   <button
                     key={idx}
                     onClick={() => setSelectedDate(isSelected ? null : dayStr)}
-                    className={`relative flex min-h-[60px] flex-col items-center rounded-lg p-1.5 text-xs transition-colors ${
+                    className={`relative flex min-h-[48px] sm:min-h-[60px] flex-col items-center rounded-lg p-1 sm:p-1.5 text-xs transition-colors ${
                       isSelected
                         ? "bg-sky-600/20 border border-sky-500/50"
                         : isToday
