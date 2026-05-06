@@ -99,6 +99,7 @@ export interface Recurrence {
   categoryId?: string | null;
   categoryName?: string | null;
   nextExecutionDate?: string | null;
+  automatic: boolean;
 }
 
 export interface ReceivableSummary {

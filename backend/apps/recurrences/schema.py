@@ -18,6 +18,7 @@ class RecurrenceType:
     day_of_month: int
     use_business_day: bool
     is_active: bool
+    automatic: bool
     start_date: date
     end_date: Optional[date]
     account_id: strawberry.ID
@@ -33,7 +34,6 @@ def map_recurrence(rec: Recurrence) -> RecurrenceType:
     today = date.today()
     next_exec = rec.get_execution_date(today.year, today.month)
     if next_exec and next_exec < today:
-        # Already past this month, compute for next
         nm = today.month + 1 if today.month < 12 else 1
         ny = today.year if today.month < 12 else today.year + 1
         next_exec = rec.get_execution_date(ny, nm)
@@ -47,6 +47,7 @@ def map_recurrence(rec: Recurrence) -> RecurrenceType:
         day_of_month=rec.day_of_month,
         use_business_day=rec.use_business_day,
         is_active=rec.is_active,
+        automatic=rec.automatic,
         start_date=rec.start_date,
         end_date=rec.end_date,
         account_id=strawberry.ID(str(rec.account_id)),
@@ -71,6 +72,7 @@ class CreateRecurrenceInput:
     credit_card_id: Optional[strawberry.ID] = None
     category_id: Optional[strawberry.ID] = None
     use_business_day: bool = False
+    automatic: bool = False
     end_date: Optional[date] = None
 
 
@@ -84,6 +86,7 @@ class UpdateRecurrenceInput:
     account_id: Optional[strawberry.ID] = None
     day_of_month: Optional[int] = None
     use_business_day: Optional[bool] = None
+    automatic: Optional[bool] = None
     is_active: Optional[bool] = None
     end_date: Optional[date] = None
     category_id: Optional[strawberry.ID] = None
@@ -151,6 +154,7 @@ class RecurrenceMutation:
             category=category,
             day_of_month=input.day_of_month,
             use_business_day=input.use_business_day,
+            automatic=input.automatic,
             start_date=input.start_date,
             end_date=input.end_date,
         )
@@ -186,6 +190,8 @@ class RecurrenceMutation:
             rec.day_of_month = input.day_of_month
         if input.use_business_day is not None:
             rec.use_business_day = input.use_business_day
+        if input.automatic is not None:
+            rec.automatic = input.automatic
         if input.is_active is not None:
             rec.is_active = input.is_active
         if input.end_date is not None:
@@ -266,7 +272,56 @@ class RecurrenceMutation:
                 kwargs["installment_number"] = 1
                 kwargs["total_installments"] = 1
 
-            Transaction.objects.create(**kwargs, is_pending_recurrence=True)
+            Transaction.objects.create(**kwargs, is_pending_recurrence=not rec.automatic)
             created += 1
 
         return created
+
+    @strawberry.mutation
+    def reprocess_recurrence(self, info: strawberry.types.Info, id: strawberry.ID) -> int:
+        """Apaga o lançamento pendente deste mês para esta recorrência e recria com as configurações atuais. Retorna 1 se criado, 0 se fora do dia de execução."""
+        from apps.transactions.models import Transaction
+
+        user = require_auth(info)
+        rec = Recurrence.objects.filter(id=id, user=user).select_related(
+            "account", "credit_card", "category"
+        ).first()
+        if not rec:
+            raise Exception("Recorrência não encontrada.")
+
+        today = date.today()
+
+        Transaction.objects.filter(
+            recurrence=rec,
+            date__year=today.year,
+            date__month=today.month,
+            is_pending_recurrence=True,
+        ).delete()
+
+        exec_date = rec.get_execution_date(today.year, today.month)
+        if not exec_date:
+            return 0
+
+        kwargs = dict(
+            user=user,
+            description=rec.description,
+            amount=rec.amount,
+            transaction_type=rec.recurrence_type,
+            payment_method=rec.payment_method,
+            date=exec_date,
+            account=rec.account if rec.payment_method != "credit" else None,
+            category=rec.category,
+            recurrence=rec,
+        )
+
+        if rec.payment_method == "credit" and rec.credit_card:
+            from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
+            first_month = get_first_invoice_month(rec.credit_card, exec_date)
+            invoice = get_or_create_invoice(rec.credit_card, first_month)
+            kwargs["credit_card"] = rec.credit_card
+            kwargs["invoice"] = invoice
+            kwargs["installment_number"] = 1
+            kwargs["total_installments"] = 1
+
+        Transaction.objects.create(**kwargs, is_pending_recurrence=not rec.automatic)
+        return 1

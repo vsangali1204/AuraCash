@@ -50,6 +50,10 @@ class Recurrence(models.Model):
         help_text="Se True, usa o N-ésimo dia útil do mês",
     )
     is_active = models.BooleanField(default=True)
+    automatic = models.BooleanField(
+        default=False,
+        help_text="Se True, efetiva o lançamento direto no saldo sem pedir confirmação",
+    )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
 

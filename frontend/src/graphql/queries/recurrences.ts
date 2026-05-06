@@ -10,6 +10,7 @@ const RECURRENCE_FIELDS = gql`
     dayOfMonth
     useBusinessDay
     isActive
+    automatic
     startDate
     endDate
     accountId
@@ -67,5 +68,11 @@ export const DELETE_RECURRENCE_MUTATION = gql`
 export const PROCESS_RECURRENCES_MUTATION = gql`
   mutation ProcessRecurrences {
     processRecurrences
+  }
+`;
+
+export const REPROCESS_RECURRENCE_MUTATION = gql`
+  mutation ReprocessRecurrence($id: ID!) {
+    reprocessRecurrence(id: $id)
   }
 `;

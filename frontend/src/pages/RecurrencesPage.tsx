@@ -3,7 +3,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, RefreshCw, Pause, Play, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Pause, Play, Zap, RotateCcw } from "lucide-react";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/Badge";
 import {
   RECURRENCES_QUERY, CREATE_RECURRENCE_MUTATION,
   UPDATE_RECURRENCE_MUTATION, TOGGLE_RECURRENCE_MUTATION, DELETE_RECURRENCE_MUTATION,
-  PROCESS_RECURRENCES_MUTATION,
+  PROCESS_RECURRENCES_MUTATION, REPROCESS_RECURRENCE_MUTATION,
 } from "@/graphql/queries/recurrences";
 import { PENDING_RECURRENCES_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
@@ -37,6 +37,7 @@ const schema = z.object({
   creditCardId: z.string().optional(),
   categoryId: z.string().optional(),
   useBusinessDay: z.boolean().default(false),
+  automatic: z.boolean().default(false),
   endDate: z.string().optional(),
 });
 
@@ -88,7 +89,7 @@ export function RecurrencesPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       recurrenceType: "expense", paymentMethod: "pix",
-      dayOfMonth: 1, useBusinessDay: false, startDate: todayISO(),
+      dayOfMonth: 1, useBusinessDay: false, automatic: false, startDate: todayISO(),
     },
   });
 
@@ -117,6 +118,18 @@ export function RecurrencesPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const [reprocessRec] = useMutation<{ reprocessRecurrence: number }>(
+    REPROCESS_RECURRENCE_MUTATION,
+    {
+      refetchQueries: [{ query: PENDING_RECURRENCES_QUERY }],
+      onCompleted: (d) => {
+        if (d.reprocessRecurrence === 0) toast("Recorrência fora do dia de execução — nenhum lançamento gerado.", { icon: "ℹ️" });
+        else toast.success("Lançamento reprocessado com sucesso!");
+      },
+      onError: (e) => toast.error(e.message),
+    }
+  );
+
   const [processRec, { loading: processing }] = useMutation<{ processRecurrences: number }>(
     PROCESS_RECURRENCES_MUTATION,
     {
@@ -132,7 +145,7 @@ export function RecurrencesPage() {
 
   function openCreate() {
     setEditing(null);
-    reset({ recurrenceType: "expense", paymentMethod: "pix", dayOfMonth: 1, useBusinessDay: false, startDate: todayISO() });
+    reset({ recurrenceType: "expense", paymentMethod: "pix", dayOfMonth: 1, useBusinessDay: false, automatic: false, startDate: todayISO() });
     setModalOpen(true);
   }
 
@@ -144,6 +157,7 @@ export function RecurrencesPage() {
       accountId: rec.accountId, dayOfMonth: rec.dayOfMonth,
       startDate: rec.startDate, creditCardId: rec.creditCardId ?? "",
       categoryId: rec.categoryId ?? "", useBusinessDay: rec.useBusinessDay,
+      automatic: rec.automatic,
       endDate: rec.endDate ?? "",
     });
     setModalOpen(true);
@@ -160,6 +174,7 @@ export function RecurrencesPage() {
       accountId: data.accountId,
       dayOfMonth: data.dayOfMonth,
       useBusinessDay: data.useBusinessDay,
+      automatic: data.automatic,
       categoryId: data.categoryId || null,
       endDate: data.endDate || null,
     };
@@ -233,6 +248,13 @@ export function RecurrencesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => reprocessRec({ variables: { id: rec.id } })}
+                    className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
+                    title="Reprocessar lançamento deste mês"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
                   <button onClick={() => toggleRec({ variables: { id: rec.id } })}
                     className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors">
                     {rec.isActive ? <Pause size={14} /> : <Play size={14} />}
@@ -250,6 +272,10 @@ export function RecurrencesPage() {
                   {rec.categoryName && (
                     <Badge variant="neutral">{rec.categoryName}</Badge>
                   )}
+                  {rec.automatic
+                    ? <Badge variant="neutral" className="text-sky-400 border-sky-500/30">Automático</Badge>
+                    : <Badge variant="neutral" className="text-amber-400 border-amber-500/30">Confirmação</Badge>
+                  }
                   {!rec.isActive && <Badge variant="neutral">Pausada</Badge>}
                 </div>
                 <p className={`text-lg font-bold ${rec.recurrenceType === "income" ? "text-emerald-400" : "text-red-400"}`}>
@@ -286,9 +312,17 @@ export function RecurrencesPage() {
             <Input label="Dia do mês (1-31)" type="number" min={1} max={31} error={errors.dayOfMonth?.message} {...register("dayOfMonth")} />
             <Select label="Categoria" options={categoryOptions} {...register("categoryId")} />
           </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="useBusinessDay" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-sky-500" {...register("useBusinessDay")} />
-            <label htmlFor="useBusinessDay" className="text-sm text-gray-300">Usar N-ésimo dia útil do mês</label>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="useBusinessDay" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-sky-500" {...register("useBusinessDay")} />
+              <label htmlFor="useBusinessDay" className="text-sm text-gray-300">Usar N-ésimo dia útil do mês</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="automatic" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-sky-500" {...register("automatic")} />
+              <label htmlFor="automatic" className="text-sm text-gray-300">
+                Automático <span className="text-gray-500">(efetiva direto no saldo, sem pedir confirmação)</span>
+              </label>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Data de início" type="date" error={errors.startDate?.message} {...register("startDate")} />
