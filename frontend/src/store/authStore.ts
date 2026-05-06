@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, StateStorage } from "zustand/middleware";
+import { persist, createJSONStorage, StateStorage } from "zustand/middleware";
 
 interface User {
   id: string;
@@ -18,7 +18,7 @@ interface AuthState {
 }
 
 // Persiste em localStorage quando "manter conectado" está ativo, sessionStorage caso contrário
-const dynamicStorage: StateStorage = {
+const rawStorage: StateStorage = {
   getItem: (name) => localStorage.getItem(name) ?? sessionStorage.getItem(name),
   setItem: (name, value) => {
     const remember = localStorage.getItem("auracash-remember") === "true";
@@ -63,7 +63,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auracash-auth",
-      storage: dynamicStorage,
+      storage: createJSONStorage(() => rawStorage),
       partialize: (state) => ({
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,

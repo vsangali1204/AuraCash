@@ -78,11 +78,9 @@ export function PendingRecurrencesModal({ transactions, isOpen, onClose, dashboa
     setEditValue(String(t.amount));
   }
 
-  const remaining = transactions.filter((t) => !loadingId || loadingId !== t.id);
-
   return (
     <Modal
-      isOpen={isOpen}
+      open={isOpen}
       onClose={onClose}
       title="Recorrências aguardando confirmação"
     >
