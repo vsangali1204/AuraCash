@@ -234,7 +234,7 @@ class RecurrenceMutation:
 
         for rec in recurrences:
             exec_date = rec.get_execution_date(today.year, today.month)
-            if not exec_date:
+            if not exec_date or exec_date != today:
                 continue
 
             already_done = Transaction.objects.filter(
