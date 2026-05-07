@@ -125,9 +125,6 @@ export function InvoicesPage() {
   );
   const transactions = txData?.invoiceTransactions ?? txPrevData?.invoiceTransactions ?? [];
 
-  const today = new Date();
-  const currentYM = getMonthYM(today.getFullYear(), today.getMonth() + 1);
-
   const metrics = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10);
 
