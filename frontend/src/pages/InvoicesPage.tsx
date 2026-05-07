@@ -119,11 +119,11 @@ export function InvoicesPage() {
   const selectedMonthYM = getMonthYM(navMonth.year, navMonth.month);
   const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth.startsWith(selectedMonthYM)) ?? null;
 
-  const { data: txData, loading: txLoading } = useQuery<{ invoiceTransactions: Transaction[] }>(
+  const { data: txData, loading: txLoading, previousData: txPrevData } = useQuery<{ invoiceTransactions: Transaction[] }>(
     INVOICE_TRANSACTIONS_QUERY,
     { variables: { invoiceId: selectedInvoice?.id }, skip: !selectedInvoice }
   );
-  const transactions = txData?.invoiceTransactions ?? [];
+  const transactions = txData?.invoiceTransactions ?? txPrevData?.invoiceTransactions ?? [];
 
   const today = new Date();
   const currentYM = getMonthYM(today.getFullYear(), today.getMonth() + 1);
@@ -284,65 +284,69 @@ export function InvoicesPage() {
         </div>
       </div>
 
-      {/* Segunda linha — dados da fatura selecionada */}
-      {selectedInvoice && !txLoading && (() => {
-        const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
-        const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
-        const totalMeu = totalFatura - totalReceber;
+      {/* Segunda linha — totais globais do mês selecionado (todos os cartões) */}
+      {(() => {
+        const monthInvoices = allInvoices.filter((inv) => inv.referenceMonth.startsWith(selectedMonthYM));
+        if (monthInvoices.length === 0) return null;
+        const totalFaturado = monthInvoices.reduce((s, inv) => s + inv.totalAmount, 0);
+        const totalPago = monthInvoices.reduce((s, inv) => s + inv.paidAmount, 0);
+        const totalAPagar = totalFaturado - totalPago;
         const todayStr = new Date().toISOString().slice(0, 10);
-        const dueDate = selectedInvoice.dueDate;
-        const diffDays = Math.round((new Date(dueDate).getTime() - new Date(todayStr).getTime()) / 86400000);
-
-        let validacao: { label: string; sub: string; color: string; bg: string; dot: string };
-        if (selectedInvoice.status === "paid") {
-          validacao = { label: "Fatura paga", sub: "Quitada", color: "text-emerald-400", bg: "bg-emerald-500/15", dot: "bg-emerald-400" };
-        } else if (diffDays < 0) {
-          validacao = { label: "Em atraso", sub: `${Math.abs(diffDays)} dia${Math.abs(diffDays) !== 1 ? "s" : ""} de atraso`, color: "text-red-400", bg: "bg-red-500/15", dot: "bg-red-400" };
-        } else if (diffDays === 0) {
-          validacao = { label: "Vence hoje", sub: formatDate(dueDate), color: "text-red-400", bg: "bg-red-500/15", dot: "bg-red-400" };
-        } else if (diffDays <= 3) {
-          validacao = { label: "Vence em breve", sub: `${diffDays} dia${diffDays !== 1 ? "s" : ""}`, color: "text-amber-400", bg: "bg-amber-500/15", dot: "bg-amber-400" };
-        } else {
-          validacao = { label: "No prazo", sub: `vence ${formatDate(dueDate)}`, color: "text-sky-400", bg: "bg-sky-500/15", dot: "bg-sky-400" };
-        }
+        const hasOverdue = monthInvoices.some((inv) => inv.status !== "paid" && inv.dueDate < todayStr);
+        const allPaid = monthInvoices.every((inv) => inv.status === "paid");
+        const pendingCount = monthInvoices.filter((inv) => inv.status !== "paid").length;
 
         return (
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15">
-                <AlertCircle size={14} className="text-amber-400" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/15">
+                <Receipt size={14} className="text-slate-400" />
               </div>
-              <p className="text-[11px] text-gray-500">A receber</p>
-              <p className="text-base font-bold tabular-nums text-amber-300 sm:text-lg">
-                {formatCurrency(totalReceber)}
+              <p className="text-[11px] text-gray-500">Total faturado</p>
+              <p className="text-base font-bold tabular-nums text-white sm:text-lg">
+                {formatCurrency(totalFaturado)}
               </p>
               <p className="text-[11px] text-gray-600">
-                {transactions.filter((t) => t.isReceivable).length} lançamento{transactions.filter((t) => t.isReceivable).length !== 1 ? "s" : ""}
+                {monthInvoices.length} fatura{monthInvoices.length !== 1 ? "s" : ""} no mês
               </p>
             </div>
 
             <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/15">
-                <DollarSign size={14} className="text-sky-400" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15">
+                <CheckCircle2 size={14} className="text-emerald-400" />
               </div>
-              <p className="text-[11px] text-gray-500">Total meu</p>
-              <p className="text-base font-bold tabular-nums text-sky-300 sm:text-lg">
-                {formatCurrency(totalMeu)}
+              <p className="text-[11px] text-gray-500">Já pago</p>
+              <p className="text-base font-bold tabular-nums text-emerald-300 sm:text-lg">
+                {formatCurrency(totalPago)}
               </p>
               <p className="text-[11px] text-gray-600">
-                de {formatCurrency(totalFatura)} na fatura
+                {totalFaturado > 0
+                  ? `${((totalPago / totalFaturado) * 100).toFixed(0)}% quitado`
+                  : "—"}
               </p>
             </div>
 
             <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-              <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", validacao.bg)}>
-                <span className={cn("h-2.5 w-2.5 rounded-full", validacao.dot)} />
+              <div className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-lg",
+                allPaid ? "bg-emerald-500/15" : hasOverdue ? "bg-red-500/15" : "bg-amber-500/15"
+              )}>
+                <DollarSign size={14} className={allPaid ? "text-emerald-400" : hasOverdue ? "text-red-400" : "text-amber-400"} />
               </div>
-              <p className="text-[11px] text-gray-500">Situação</p>
-              <p className={cn("text-base font-bold sm:text-lg", validacao.color)}>
-                {validacao.label}
+              <p className="text-[11px] text-gray-500">A pagar</p>
+              <p className={cn(
+                "text-base font-bold tabular-nums sm:text-lg",
+                allPaid ? "text-emerald-300" : hasOverdue ? "text-red-300" : "text-amber-300"
+              )}>
+                {formatCurrency(totalAPagar)}
               </p>
-              <p className="text-[11px] text-gray-600 capitalize">{validacao.sub}</p>
+              <p className="text-[11px] text-gray-600">
+                {allPaid
+                  ? "Tudo quitado"
+                  : hasOverdue
+                    ? `${pendingCount} em atraso`
+                    : `${pendingCount} pendente${pendingCount !== 1 ? "s" : ""}`}
+              </p>
             </div>
           </div>
         );
@@ -595,9 +599,9 @@ export function InvoicesPage() {
 
           {/* Lista de lançamentos */}
           {selectedInvoice && (
-            <div>
+            <div className={cn("transition-opacity duration-200", txLoading && "opacity-50")}>
               {/* Totais — acima da lista */}
-              {!txLoading && transactions.length > 0 && (() => {
+              {transactions.length > 0 && (() => {
                 const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
                 const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
                 const totalMeu = totalFatura - totalReceber;
@@ -621,20 +625,14 @@ export function InvoicesPage() {
 
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white">Lançamentos</p>
-                {!txLoading && (
+                {transactions.length > 0 && (
                   <span className="text-xs text-gray-500">
                     {transactions.length} item{transactions.length !== 1 ? "s" : ""}
                   </span>
                 )}
               </div>
 
-              {txLoading ? (
-                <div className="space-y-2">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />
-                  ))}
-                </div>
-              ) : transactions.length === 0 ? (
+              {!txLoading && transactions.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-surface-border py-10">
                   <Receipt size={28} className="text-gray-600" />
                   <p className="text-sm text-gray-500">Nenhum lançamento nesta fatura.</p>
