@@ -17,9 +17,6 @@ import {
   Calendar,
   TrendingUp,
 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from "recharts";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -85,27 +82,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function buildWeeklyData(txs: Transaction[], year: number, month: number) {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const weeks = [
-    { label: "Sem 1", range: [1, 7], total: 0 },
-    { label: "Sem 2", range: [8, 14], total: 0 },
-    { label: "Sem 3", range: [15, 21], total: 0 },
-    { label: "Sem 4", range: [22, daysInMonth], total: 0 },
-  ];
-  txs.forEach((tx) => {
-    const day = new Date(tx.date + "T12:00:00").getDate();
-    const i = day <= 7 ? 0 : day <= 14 ? 1 : day <= 21 ? 2 : 3;
-    weeks[i].total += tx.amount;
-  });
-  return weeks.map((w) => ({ label: w.label, value: w.total }));
-}
-
-const CHART_STYLE = {
-  contentStyle: { background: "#13131f", border: "1px solid #2a2a3a", borderRadius: "8px", fontSize: "12px" },
-  labelStyle: { color: "#fff" },
-  itemStyle: { color: "#a0a0b0" },
-};
 
 export function InvoicesPage() {
   const now = new Date();
@@ -154,11 +130,6 @@ export function InvoicesPage() {
       .reduce((sum, inv) => sum + inv.totalAmount, 0);
     return { totalOpen, dueSoon, paidThisMonth };
   }, [allInvoices, currentYM]);
-
-  const weeklyData = useMemo(
-    () => buildWeeklyData(transactions, navMonth.year, navMonth.month),
-    [transactions, navMonth.year, navMonth.month]
-  );
 
   const groupedTxs = useMemo(() => {
     const groups = new Map<string, Transaction[]>();
@@ -440,36 +411,6 @@ export function InvoicesPage() {
           {/* Gráfico + lançamentos */}
           {selectedInvoice && (
             <>
-              {/* Gráfico de gastos por semana */}
-              {!txLoading && transactions.length > 0 && (
-                <Card>
-                  <p className="mb-4 text-sm font-semibold text-white">Gastos por semana</p>
-                  <ResponsiveContainer width="100%" height={140}>
-                    <BarChart data={weeklyData} barSize={36}>
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fill: "#6b7280", fontSize: 11 }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fill: "#6b7280", fontSize: 10 }}
-                        tickFormatter={(v) => v === 0 ? "0" : `${(v / 1000).toFixed(0)}k`}
-                        axisLine={false}
-                        tickLine={false}
-                        width={32}
-                      />
-                      <Tooltip
-                        {...CHART_STYLE}
-                        formatter={(v: number) => [formatCurrency(v), "Gastos"]}
-                        cursor={{ fill: "rgba(255,255,255,0.04)" }}
-                      />
-                      <Bar dataKey="value" name="Gastos" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-
               {/* Lista de lançamentos */}
               <div>
                 <div className="mb-3 flex items-center justify-between">
