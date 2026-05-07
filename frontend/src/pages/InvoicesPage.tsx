@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@apollo/client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -10,8 +10,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   Tag,
   Receipt,
   Calendar,
@@ -53,12 +51,9 @@ function getMonthYM(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-function prevMonthOf(year: number, month: number) {
-  return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-}
-
-function nextMonthOf(year: number, month: number) {
-  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+function parseMonthYM(ym: string): { year: number; month: number } {
+  const parts = ym.split("-");
+  return { year: Number(parts[0]), month: Number(parts[1]) };
 }
 
 function statusConfig(status: string) {
@@ -82,7 +77,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-
 export function InvoicesPage() {
   const now = new Date();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
@@ -100,11 +94,28 @@ export function InvoicesPage() {
   const effectiveCardId = selectedCardId ?? cards[0]?.id ?? null;
   const selectedCard = cards.find((c) => c.id === effectiveCardId) ?? null;
 
+  // Auto-seleciona o mês da fatura vigente ao trocar de cartão
+  useEffect(() => {
+    if (!effectiveCardId || !cards.length) return;
+    const card = cards.find((c) => c.id === effectiveCardId);
+    if (card?.currentInvoice?.referenceMonth) {
+      setNavMonth(parseMonthYM(card.currentInvoice.referenceMonth));
+    }
+  }, [effectiveCardId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { data: cardInvData, loading: cardInvLoading } = useQuery<{ invoices: Invoice[] }>(INVOICES_QUERY, {
     variables: { creditCardId: effectiveCardId },
     skip: !effectiveCardId,
   });
   const cardInvoices = cardInvData?.invoices ?? [];
+
+  // Meses disponíveis (chips de histórico), mais recentes primeiro
+  const invoiceMonths = useMemo(() =>
+    [...cardInvoices]
+      .sort((a, b) => b.referenceMonth.localeCompare(a.referenceMonth))
+      .map((inv) => ({ ym: inv.referenceMonth.slice(0, 7), status: inv.status })),
+    [cardInvoices]
+  );
 
   const selectedMonthYM = getMonthYM(navMonth.year, navMonth.month);
   const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth.startsWith(selectedMonthYM)) ?? null;
@@ -169,9 +180,6 @@ export function InvoicesPage() {
     ? Math.min(100, (usedAmount / selectedCard.totalLimit) * 100)
     : 0;
 
-  const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
-    .toLocaleString("pt-BR", { month: "long", year: "numeric" });
-
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -183,30 +191,9 @@ export function InvoicesPage() {
       {/* Métricas resumo */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
-          {
-            label: "Total em aberto",
-            value: metrics.totalOpen,
-            icon: Clock,
-            iconBg: "bg-blue-500/15",
-            iconColor: "text-blue-400",
-            valueColor: "text-blue-300",
-          },
-          {
-            label: "Vence este mês",
-            value: metrics.dueSoon,
-            icon: AlertCircle,
-            iconBg: "bg-amber-500/15",
-            iconColor: "text-amber-400",
-            valueColor: "text-amber-300",
-          },
-          {
-            label: "Pago este mês",
-            value: metrics.paidThisMonth,
-            icon: CheckCircle2,
-            iconBg: "bg-emerald-500/15",
-            iconColor: "text-emerald-400",
-            valueColor: "text-emerald-300",
-          },
+          { label: "Total em aberto", value: metrics.totalOpen, icon: Clock, iconBg: "bg-blue-500/15", iconColor: "text-blue-400", valueColor: "text-blue-300" },
+          { label: "Vence este mês",  value: metrics.dueSoon,   icon: AlertCircle, iconBg: "bg-amber-500/15", iconColor: "text-amber-400", valueColor: "text-amber-300" },
+          { label: "Pago este mês",   value: metrics.paidThisMonth, icon: CheckCircle2, iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", valueColor: "text-emerald-300" },
         ].map((m) => (
           <div key={m.label} className="flex flex-col gap-1.5 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
             <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", m.iconBg)}>
@@ -220,11 +207,11 @@ export function InvoicesPage() {
         ))}
       </div>
 
-      {/* Seletor de cartões */}
+      {/* Seletor de cartões — cards maiores */}
       {cardsLoading ? (
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-14 w-36 shrink-0 animate-pulse rounded-xl bg-surface-card" />
+            <div key={i} className="h-32 w-52 shrink-0 animate-pulse rounded-xl bg-surface-card" />
           ))}
         </div>
       ) : cards.length === 0 ? (
@@ -233,42 +220,80 @@ export function InvoicesPage() {
           <p className="text-sm text-gray-500">Nenhum cartão cadastrado.</p>
         </Card>
       ) : (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-3 overflow-x-auto pb-1">
           {cards.map((card) => {
             const isActive = card.id === effectiveCardId;
-            const hasPending = card.currentInvoice &&
-              ["open", "partial", "closed"].includes(card.currentInvoice.status) &&
-              card.currentInvoice.totalAmount > 0;
+            const inv = card.currentInvoice;
+            const cardUsed = card.totalLimit - card.availableLimit;
+            const cardUsedPct = card.totalLimit > 0 ? Math.min(100, (cardUsed / card.totalLimit) * 100) : 0;
+
             return (
               <button
                 key={card.id}
                 onClick={() => setSelectedCardId(card.id)}
                 className={cn(
-                  "flex shrink-0 items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-left transition-all",
+                  "flex w-52 shrink-0 flex-col gap-3 rounded-xl border p-4 text-left transition-all",
                   isActive
                     ? "border-sky-500/40 bg-sky-500/10"
-                    : "border-surface-border bg-surface-card text-gray-400 hover:border-sky-500/20 hover:text-white"
+                    : "border-surface-border bg-surface-card hover:border-sky-500/20"
                 )}
               >
-                <div className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                  isActive ? "bg-sky-500/20" : "bg-surface"
-                )}>
-                  <CardIcon size={14} className={isActive ? "text-sky-400" : "text-gray-500"} />
+                {/* Nome + bandeira */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+                      isActive ? "bg-sky-500/20" : "bg-surface"
+                    )}>
+                      <CardIcon size={13} className={isActive ? "text-sky-400" : "text-gray-500"} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={cn("truncate text-sm font-semibold", isActive ? "text-white" : "text-gray-300")}>
+                        {card.name}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        {CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand}
+                      </p>
+                    </div>
+                  </div>
+                  {inv && <StatusBadge status={inv.status} />}
                 </div>
-                <div className="min-w-0">
-                  <p className={cn("truncate text-sm font-medium max-w-[110px]", isActive ? "text-white" : "text-gray-300")}>
-                    {card.name}
-                  </p>
-                  <p className="truncate text-[11px] text-gray-500">
-                    {card.currentInvoice
-                      ? formatCurrency(card.currentInvoice.totalAmount)
-                      : (CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand)}
-                  </p>
-                </div>
-                {hasPending && (
-                  <span className="ml-0.5 h-2 w-2 shrink-0 rounded-full bg-blue-400" />
+
+                {/* Valor da fatura */}
+                {inv ? (
+                  <div>
+                    <p className="text-[11px] text-gray-500 mb-0.5">Fatura atual</p>
+                    <p className={cn("text-xl font-bold tabular-nums", isActive ? "text-white" : "text-gray-200")}>
+                      {formatCurrency(inv.totalAmount)}
+                    </p>
+                    {inv.status !== "paid" && inv.paidAmount > 0 && (
+                      <p className="text-[11px] text-amber-400 mt-0.5">
+                        falta {formatCurrency(inv.totalAmount - inv.paidAmount)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-600 italic">Sem fatura no ciclo</p>
                 )}
+
+                {/* Limite */}
+                <div>
+                  <div className="h-1.5 rounded-full bg-surface-border overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-1.5 rounded-full transition-all",
+                        cardUsedPct > 90 ? "bg-red-500" : cardUsedPct > 70 ? "bg-amber-500" : "bg-sky-500"
+                      )}
+                      style={{ width: `${cardUsedPct}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <p className="text-[11px] text-gray-500">
+                      <span className="text-emerald-400">{formatCurrency(card.availableLimit)}</span> disponível
+                    </p>
+                    <p className="text-[11px] text-gray-600">{cardUsedPct.toFixed(0)}%</p>
+                  </div>
+                </div>
               </button>
             );
           })}
@@ -278,12 +303,12 @@ export function InvoicesPage() {
       {/* Conteúdo do cartão selecionado */}
       {selectedCard && (
         <div className="space-y-4">
-          {/* Info do limite */}
+          {/* Info do cartão selecionado */}
           <div className="rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-4 mb-2.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-600/20">
-                  <CardIcon size={14} className="text-sky-400" />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600/20">
+                  <CardIcon size={15} className="text-sky-400" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{selectedCard.name}</p>
@@ -293,14 +318,18 @@ export function InvoicesPage() {
                   </p>
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs text-gray-500">Disponível</p>
-                <p className="text-sm font-bold text-emerald-400 tabular-nums">
-                  {formatCurrency(selectedCard.availableLimit)}
-                </p>
+              <div className="grid grid-cols-2 gap-3 text-right shrink-0">
+                <div>
+                  <p className="text-[11px] text-gray-500">Disponível</p>
+                  <p className="text-sm font-bold text-emerald-400 tabular-nums">{formatCurrency(selectedCard.availableLimit)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-gray-500">Limite total</p>
+                  <p className="text-sm font-bold text-white tabular-nums">{formatCurrency(selectedCard.totalLimit)}</p>
+                </div>
               </div>
             </div>
-            <div className="h-1.5 rounded-full bg-surface-border overflow-hidden">
+            <div className="mt-3 h-1.5 rounded-full bg-surface-border overflow-hidden">
               <div
                 className={cn(
                   "h-1.5 rounded-full transition-all",
@@ -310,26 +339,36 @@ export function InvoicesPage() {
               />
             </div>
             <p className="mt-1 text-[11px] text-gray-600">
-              {formatCurrency(usedAmount)} usado de {formatCurrency(selectedCard.totalLimit)} ({usedPct.toFixed(0)}%)
+              {formatCurrency(usedAmount)} usado · {usedPct.toFixed(0)}% do limite
             </p>
           </div>
 
-          {/* Navegação de mês */}
-          <div className="flex items-center justify-between gap-3">
-            <button
-              onClick={() => setNavMonth((m) => prevMonthOf(m.year, m.month))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-sm font-semibold capitalize text-white">{monthLabel}</span>
-            <button
-              onClick={() => setNavMonth((m) => nextMonthOf(m.year, m.month))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          {/* Chips de mês — histórico de faturas */}
+          {invoiceMonths.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {invoiceMonths.map(({ ym, status }) => {
+                const isSelected = selectedMonthYM === ym;
+                const cfg = statusConfig(status);
+                return (
+                  <button
+                    key={ym}
+                    onClick={() => setNavMonth(parseMonthYM(ym))}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all capitalize",
+                      isSelected
+                        ? "border-sky-500/40 bg-sky-500/15 text-white"
+                        : "border-surface-border bg-surface-card text-gray-400 hover:border-sky-500/20 hover:text-white"
+                    )}
+                  >
+                    {!isSelected && (
+                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", cfg.dot)} />
+                    )}
+                    {formatMonthYear(ym)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Resumo da fatura */}
           {cardInvLoading ? (
@@ -408,121 +447,105 @@ export function InvoicesPage() {
             </div>
           )}
 
-          {/* Gráfico + lançamentos */}
+          {/* Lista de lançamentos */}
           {selectedInvoice && (
-            <>
-              {/* Lista de lançamentos */}
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-white">Lançamentos</p>
-                  {!txLoading && (
-                    <span className="text-xs text-gray-500">
-                      {transactions.length} item{transactions.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-
-                {txLoading ? (
-                  <div className="space-y-2">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />
-                    ))}
-                  </div>
-                ) : transactions.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-surface-border py-10">
-                    <Receipt size={28} className="text-gray-600" />
-                    <p className="text-sm text-gray-500">Nenhum lançamento nesta fatura.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="rounded-xl border border-surface-border overflow-hidden">
-                      {groupedTxs.map(([date, txList], groupIdx) => (
-                        <div key={date}>
-                          {/* Cabeçalho de data */}
-                          <div className={cn(
-                            "px-4 py-2 bg-surface/60",
-                            groupIdx > 0 && "border-t border-surface-border"
-                          )}>
-                            <p className="text-xs font-semibold capitalize text-gray-500">
-                              {new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
-                                weekday: "long",
-                                day: "numeric",
-                                month: "long",
-                              })}
-                            </p>
-                          </div>
-
-                          {/* Lançamentos do dia */}
-                          <div className="divide-y divide-surface-border/50">
-                            {txList.map((tx) => (
-                              <div
-                                key={tx.id}
-                                className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover/30 transition-colors"
-                              >
-                                <div
-                                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                                  style={
-                                    tx.category
-                                      ? { background: `${tx.category.color}20` }
-                                      : { background: "rgba(255,255,255,0.04)" }
-                                  }
-                                >
-                                  {tx.category?.icon ? (
-                                    <span className="text-base leading-none">{tx.category.icon}</span>
-                                  ) : tx.category ? (
-                                    <Tag size={14} style={{ color: tx.category.color }} />
-                                  ) : (
-                                    <Receipt size={14} className="text-gray-500" />
-                                  )}
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium leading-snug text-white">
-                                    {tx.description}
-                                  </p>
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                    {tx.category && (
-                                      <span
-                                        className="text-xs font-medium"
-                                        style={{ color: tx.category.color }}
-                                      >
-                                        {tx.category.name}
-                                      </span>
-                                    )}
-                                    {tx.installmentNumber && tx.totalInstallments && (
-                                      <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-gray-400">
-                                        {tx.installmentNumber}/{tx.totalInstallments}x
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <p className="shrink-0 text-sm font-bold tabular-nums text-red-400">
-                                  {formatCurrency(tx.amount)}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Total dos lançamentos */}
-                    <div className="mt-3 flex items-center justify-between rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-                      <p className="text-sm text-gray-500">
-                        {transactions.length} lançamento{transactions.length !== 1 ? "s" : ""}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <TrendingUp size={14} className="text-red-400" />
-                        <p className="text-sm font-bold tabular-nums text-white">
-                          {formatCurrency(transactions.reduce((s, t) => s + t.amount, 0))}
-                        </p>
-                      </div>
-                    </div>
-                  </>
+            <div>
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">Lançamentos</p>
+                {!txLoading && (
+                  <span className="text-xs text-gray-500">
+                    {transactions.length} item{transactions.length !== 1 ? "s" : ""}
+                  </span>
                 )}
               </div>
-            </>
+
+              {txLoading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-card" />
+                  ))}
+                </div>
+              ) : transactions.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-surface-border py-10">
+                  <Receipt size={28} className="text-gray-600" />
+                  <p className="text-sm text-gray-500">Nenhum lançamento nesta fatura.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-surface-border overflow-hidden">
+                    {groupedTxs.map(([date, txList], groupIdx) => (
+                      <div key={date}>
+                        <div className={cn(
+                          "px-4 py-2 bg-surface/60",
+                          groupIdx > 0 && "border-t border-surface-border"
+                        )}>
+                          <p className="text-xs font-semibold capitalize text-gray-500">
+                            {new Date(date + "T12:00:00").toLocaleDateString("pt-BR", {
+                              weekday: "long", day: "numeric", month: "long",
+                            })}
+                          </p>
+                        </div>
+                        <div className="divide-y divide-surface-border/50">
+                          {txList.map((tx) => (
+                            <div
+                              key={tx.id}
+                              className="flex items-center gap-3 px-4 py-3.5 hover:bg-surface-hover/30 transition-colors"
+                            >
+                              <div
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                                style={tx.category
+                                  ? { background: `${tx.category.color}20` }
+                                  : { background: "rgba(255,255,255,0.04)" }}
+                              >
+                                {tx.category?.icon ? (
+                                  <span className="text-base leading-none">{tx.category.icon}</span>
+                                ) : tx.category ? (
+                                  <Tag size={14} style={{ color: tx.category.color }} />
+                                ) : (
+                                  <Receipt size={14} className="text-gray-500" />
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium leading-snug text-white">
+                                  {tx.description}
+                                </p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  {tx.category && (
+                                    <span className="text-xs font-medium" style={{ color: tx.category.color }}>
+                                      {tx.category.name}
+                                    </span>
+                                  )}
+                                  {tx.installmentNumber && tx.totalInstallments && (
+                                    <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-gray-400">
+                                      {tx.installmentNumber}/{tx.totalInstallments}x
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="shrink-0 text-sm font-bold tabular-nums text-red-400">
+                                {formatCurrency(tx.amount)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-surface-border bg-surface-card px-4 py-3">
+                    <p className="text-sm text-gray-500">
+                      {transactions.length} lançamento{transactions.length !== 1 ? "s" : ""}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp size={14} className="text-red-400" />
+                      <p className="text-sm font-bold tabular-nums text-white">
+                        {formatCurrency(transactions.reduce((s, t) => s + t.amount, 0))}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -551,7 +574,6 @@ export function InvoicesPage() {
                 </div>
               </div>
             </div>
-
             <form onSubmit={payForm.handleSubmit(onPaySubmit)} className="space-y-3">
               <Input
                 label="Valor a pagar (R$)"
