@@ -284,6 +284,70 @@ export function InvoicesPage() {
         </div>
       </div>
 
+      {/* Segunda linha — dados da fatura selecionada */}
+      {selectedInvoice && !txLoading && (() => {
+        const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
+        const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
+        const totalMeu = totalFatura - totalReceber;
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const dueDate = selectedInvoice.dueDate;
+        const diffDays = Math.round((new Date(dueDate).getTime() - new Date(todayStr).getTime()) / 86400000);
+
+        let validacao: { label: string; sub: string; color: string; bg: string; dot: string };
+        if (selectedInvoice.status === "paid") {
+          validacao = { label: "Fatura paga", sub: "Quitada", color: "text-emerald-400", bg: "bg-emerald-500/15", dot: "bg-emerald-400" };
+        } else if (diffDays < 0) {
+          validacao = { label: "Em atraso", sub: `${Math.abs(diffDays)} dia${Math.abs(diffDays) !== 1 ? "s" : ""} de atraso`, color: "text-red-400", bg: "bg-red-500/15", dot: "bg-red-400" };
+        } else if (diffDays === 0) {
+          validacao = { label: "Vence hoje", sub: formatDate(dueDate), color: "text-red-400", bg: "bg-red-500/15", dot: "bg-red-400" };
+        } else if (diffDays <= 3) {
+          validacao = { label: "Vence em breve", sub: `${diffDays} dia${diffDays !== 1 ? "s" : ""}`, color: "text-amber-400", bg: "bg-amber-500/15", dot: "bg-amber-400" };
+        } else {
+          validacao = { label: "No prazo", sub: `vence ${formatDate(dueDate)}`, color: "text-sky-400", bg: "bg-sky-500/15", dot: "bg-sky-400" };
+        }
+
+        return (
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15">
+                <AlertCircle size={14} className="text-amber-400" />
+              </div>
+              <p className="text-[11px] text-gray-500">A receber</p>
+              <p className="text-base font-bold tabular-nums text-amber-300 sm:text-lg">
+                {formatCurrency(totalReceber)}
+              </p>
+              <p className="text-[11px] text-gray-600">
+                {transactions.filter((t) => t.isReceivable).length} lançamento{transactions.filter((t) => t.isReceivable).length !== 1 ? "s" : ""}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/15">
+                <DollarSign size={14} className="text-sky-400" />
+              </div>
+              <p className="text-[11px] text-gray-500">Total meu</p>
+              <p className="text-base font-bold tabular-nums text-sky-300 sm:text-lg">
+                {formatCurrency(totalMeu)}
+              </p>
+              <p className="text-[11px] text-gray-600">
+                de {formatCurrency(totalFatura)} na fatura
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+              <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", validacao.bg)}>
+                <span className={cn("h-2.5 w-2.5 rounded-full", validacao.dot)} />
+              </div>
+              <p className="text-[11px] text-gray-500">Situação</p>
+              <p className={cn("text-base font-bold sm:text-lg", validacao.color)}>
+                {validacao.label}
+              </p>
+              <p className="text-[11px] text-gray-600 capitalize">{validacao.sub}</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Seletor de cartões — cards maiores */}
       {cardsLoading ? (
         <div className="flex gap-3">
