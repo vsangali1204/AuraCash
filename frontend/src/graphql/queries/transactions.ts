@@ -165,6 +165,16 @@ export const PENDING_RECURRENCES_QUERY = gql`
   }
 `;
 
+export const INVOICE_MONTH_SUMMARY_QUERY = gql`
+  query InvoiceMonthSummary($year: Int!, $month: Int!) {
+    invoiceMonthSummary(year: $year, month: $month) {
+      total
+      receivable
+      personal
+    }
+  }
+`;
+
 export const CONFIRM_PENDING_RECURRENCE_MUTATION = gql`
   ${TRANSACTION_FIELDS}
   mutation ConfirmPendingRecurrence($id: ID!, $amount: Float) {

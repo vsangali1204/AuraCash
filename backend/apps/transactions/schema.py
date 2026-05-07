@@ -178,6 +178,13 @@ class PaymentMethodSummary:
     percentage: float
 
 
+@strawberry.type
+class InvoiceMonthSummary:
+    total: float
+    receivable: float
+    personal: float
+
+
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
 @strawberry.input
@@ -680,6 +687,94 @@ class TransactionQuery:
         ]
 
 
+    @strawberry.field
+    def invoice_month_summary(
+        self, info: strawberry.types.Info, year: int, month: int
+    ) -> "InvoiceMonthSummary":
+        from apps.credit_cards.models import Invoice as InvoiceModel
+        user = require_auth(info)
+
+        invoice_ids = InvoiceModel.objects.filter(
+            credit_card__user=user,
+            reference_month__year=year,
+            reference_month__month=month,
+        ).values_list("id", flat=True)
+
+        txs = Transaction.objects.filter(
+            user=user,
+            invoice_id__in=invoice_ids,
+            parent_transaction__isnull=True,
+        )
+
+        total = float(txs.aggregate(s=Coalesce(Sum("amount"), Value(0.0), output_field=DecimalField()))["s"])
+        receivable = float(
+            txs.filter(is_receivable=True)
+            .aggregate(s=Coalesce(Sum("amount"), Value(0.0), output_field=DecimalField()))["s"]
+        )
+        return InvoiceMonthSummary(total=total, receivable=receivable, personal=total - receivable)
+
+
+# ── Helpers de propagação para parcelas ───────────────────────────────────────
+
+def _get_base_description(desc: str) -> str:
+    import re
+    m = re.match(r"^(.*)\s+\(\d+/\d+\)$", desc)
+    return m.group(1) if m else desc
+
+
+def _propagate_installment_fields(t: Transaction, input: "UpdateTransactionInput") -> None:
+    """Propaga descrição, categoria, notas e status de recebimento para todas as parcelas da série."""
+    is_child = t.parent_transaction_id is not None
+    is_parent = (
+        t.total_installments is not None
+        and t.total_installments > 1
+        and t.parent_transaction_id is None
+        and t.installment_number is None
+    )
+    if not is_child and not is_parent:
+        return
+
+    updates: dict = {}
+    if input.category_id is not None:
+        updates["category_id"] = t.category_id
+    if input.notes is not None:
+        updates["notes"] = t.notes
+    if input.is_receivable is not None:
+        updates["is_receivable"] = t.is_receivable
+        updates["debtor_name"] = t.debtor_name
+        if not t.is_receivable:
+            updates["receipt_status"] = None
+            updates["received_amount"] = Decimal("0")
+
+    base_desc = _get_base_description(t.description) if input.description is not None else None
+
+    if not updates and base_desc is None:
+        return
+
+    if is_child:
+        parent = t.parent_transaction
+        if base_desc is not None:
+            parent.description = base_desc
+        for field, value in updates.items():
+            setattr(parent, field, value)
+        parent.save()
+
+        for sibling in Transaction.objects.filter(parent_transaction=parent).exclude(id=t.id):
+            if base_desc is not None:
+                sibling.description = f"{base_desc} ({sibling.installment_number}/{sibling.total_installments})"
+            for field, value in updates.items():
+                setattr(sibling, field, value)
+            sibling.save()
+
+    elif is_parent:
+        for child in Transaction.objects.filter(parent_transaction=t):
+            if base_desc is not None:
+                child.description = f"{base_desc} ({child.installment_number}/{child.total_installments})"
+            for field, value in updates.items():
+                setattr(child, field, value)
+            child.save()
+
+
 # ── Mutations ─────────────────────────────────────────────────────────────────
 
 @strawberry.type
@@ -726,7 +821,7 @@ class TransactionMutation:
 
         receipt_status = "pending" if input.is_receivable else None
 
-        # ── Crédito parcelado ──────────────────────────────────────────────
+        # ── Crédito parcelado (apenas despesas podem ser parceladas) ──────────
         if credit_card and input.total_installments > 1:
             total = Decimal(str(input.amount))
             n = input.total_installments
@@ -739,7 +834,7 @@ class TransactionMutation:
                 user=user,
                 description=input.description,
                 amount=total,
-                transaction_type="expense",
+                transaction_type=input.transaction_type,
                 payment_method="credit",
                 date=input.date,
                 competence_date=input.competence_date,
@@ -760,7 +855,7 @@ class TransactionMutation:
                     user=user,
                     description=f"{input.description} ({i+1}/{n})",
                     amount=installment_amount,
-                    transaction_type="expense",
+                    transaction_type=input.transaction_type,
                     payment_method="credit",
                     date=input.date,
                     competence_date=invoice.due_date,
@@ -778,7 +873,7 @@ class TransactionMutation:
 
             return map_transaction(parent)
 
-        # ── Crédito à vista ────────────────────────────────────────────────
+        # ── Crédito à vista (inclui estornos/receitas no cartão) ───────────
         if credit_card:
             first_month = get_first_invoice_month(credit_card, input.date)
             invoice = get_or_create_invoice(credit_card, first_month)
@@ -786,7 +881,7 @@ class TransactionMutation:
                 user=user,
                 description=input.description,
                 amount=Decimal(str(input.amount)),
-                transaction_type="expense",
+                transaction_type=input.transaction_type,
                 payment_method="credit",
                 date=input.date,
                 competence_date=invoice.due_date,
@@ -830,6 +925,7 @@ class TransactionMutation:
     ) -> TransactionType:
         from apps.accounts.models import Account
         from apps.categories.models import Category
+        from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
 
         user = require_auth(info)
         t = Transaction.objects.filter(id=input.id, user=user).first()
@@ -853,16 +949,33 @@ class TransactionMutation:
             t.competence_date = input.competence_date
         if input.account_id is not None:
             t.account = Account.objects.filter(id=input.account_id, user=user).first()
+            # Trocou para conta avulsa → remove da fatura do cartão
+            if t.credit_card is not None:
+                t.invoice = None
+                t.credit_card = None
         if input.category_id is not None:
             t.category = Category.objects.filter(id=input.category_id, user=user).first()
         if input.is_receivable is not None:
             t.is_receivable = input.is_receivable
-        if input.debtor_name is not None:
+            if not input.is_receivable:
+                # Desmarcou "a receber" → limpa todos os campos de recebimento
+                t.receipt_status = None
+                t.received_amount = Decimal("0")
+                t.debtor_name = None
+        if input.debtor_name is not None and t.is_receivable:
             t.debtor_name = input.debtor_name
         if input.notes is not None:
             t.notes = input.notes
 
+        # Data mudou e lançamento ainda está num cartão → reatribui à fatura correta
+        if input.date is not None and t.credit_card is not None:
+            new_month = get_first_invoice_month(t.credit_card, t.date)
+            current_month = t.invoice.reference_month if t.invoice else None
+            if current_month != new_month:
+                t.invoice = get_or_create_invoice(t.credit_card, new_month)
+
         t.save()
+        _propagate_installment_fields(t, input)
         t.refresh_from_db()
         return map_transaction(t)
 

@@ -26,7 +26,7 @@ import {
   INVOICES_QUERY,
   PAY_INVOICE_MUTATION,
 } from "@/graphql/queries/creditCards";
-import { INVOICE_TRANSACTIONS_QUERY } from "@/graphql/queries/transactions";
+import { INVOICE_TRANSACTIONS_QUERY, INVOICE_MONTH_SUMMARY_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
   cn,
@@ -119,6 +119,13 @@ export function InvoicesPage() {
   const selectedMonthYM = getMonthYM(navMonth.year, navMonth.month);
   const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth.startsWith(selectedMonthYM)) ?? null;
 
+  const { data: monthSummaryData, previousData: monthSummaryPrev } = useQuery<{
+    invoiceMonthSummary: { total: number; receivable: number; personal: number };
+  }>(INVOICE_MONTH_SUMMARY_QUERY, {
+    variables: { year: navMonth.year, month: navMonth.month },
+  });
+  const monthSummary = monthSummaryData?.invoiceMonthSummary ?? monthSummaryPrev?.invoiceMonthSummary ?? null;
+
   const { data: txData, loading: txLoading, previousData: txPrevData } = useQuery<{ invoiceTransactions: Transaction[] }>(
     INVOICE_TRANSACTIONS_QUERY,
     { variables: { invoiceId: selectedInvoice?.id }, skip: !selectedInvoice }
@@ -192,8 +199,8 @@ export function InvoicesPage() {
         <p className="text-sm text-gray-500">Acompanhe as faturas dos seus cartões</p>
       </div>
 
-      {/* Métricas — 3 cards distintos e não redundantes */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+      {/* Métricas — 4 cards distintos e não redundantes */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         {/* Card 1 — Total em aberto (global, todos os cartões/meses) */}
         <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
           <div className="flex items-center justify-between">
@@ -294,6 +301,31 @@ export function InvoicesPage() {
             </div>
           );
         })()}
+
+        {/* Card 4 — A receber e Total pessoal do mês (dados reais de lançamentos) */}
+        <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/15">
+              <DollarSign size={14} className="text-violet-400" />
+            </div>
+            <span className="text-[11px] text-gray-500 capitalize">{formatMonthYear(selectedMonthYM)}</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div>
+              <p className="text-[11px] text-gray-500">A receber</p>
+              <p className="text-sm font-bold tabular-nums text-amber-300">
+                {monthSummary ? formatCurrency(monthSummary.receivable) : "—"}
+              </p>
+            </div>
+            <div className="h-px bg-surface-border" />
+            <div>
+              <p className="text-[11px] text-gray-500">Total pessoal</p>
+              <p className="text-sm font-bold tabular-nums text-white">
+                {monthSummary ? formatCurrency(monthSummary.personal) : "—"}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Seletor de cartões — cards maiores */}
