@@ -119,7 +119,7 @@ export function InvoicesPage() {
   const selectedMonthYM = getMonthYM(navMonth.year, navMonth.month);
   const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth.startsWith(selectedMonthYM)) ?? null;
 
-  const { data: monthSummaryData, previousData: monthSummaryPrev } = useQuery<{
+  const { data: monthSummaryData, loading: monthSummaryLoading, previousData: monthSummaryPrev } = useQuery<{
     invoiceMonthSummary: { total: number; receivable: number; personal: number };
   }>(INVOICE_MONTH_SUMMARY_QUERY, {
     variables: { year: navMonth.year, month: navMonth.month },
@@ -303,7 +303,11 @@ export function InvoicesPage() {
         })()}
 
         {/* Card 4 — A receber e Total pessoal do mês (dados reais de lançamentos) */}
-        <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+        <div className={cn(
+          "flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4",
+          "transition-opacity duration-200",
+          monthSummaryLoading && !monthSummary && "opacity-60"
+        )}>
           <div className="flex items-center justify-between">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-500/15">
               <DollarSign size={14} className="text-violet-400" />
@@ -313,14 +317,14 @@ export function InvoicesPage() {
           <div className="flex flex-col gap-1.5">
             <div>
               <p className="text-[11px] text-gray-500">A receber</p>
-              <p className="text-sm font-bold tabular-nums text-amber-300">
+              <p className={cn("text-sm font-bold tabular-nums text-amber-300", monthSummaryLoading && !monthSummary && "animate-pulse")}>
                 {monthSummary ? formatCurrency(monthSummary.receivable) : "—"}
               </p>
             </div>
             <div className="h-px bg-surface-border" />
             <div>
               <p className="text-[11px] text-gray-500">Total pessoal</p>
-              <p className="text-sm font-bold tabular-nums text-white">
+              <p className={cn("text-sm font-bold tabular-nums text-white", monthSummaryLoading && !monthSummary && "animate-pulse")}>
                 {monthSummary ? formatCurrency(monthSummary.personal) : "—"}
               </p>
             </div>

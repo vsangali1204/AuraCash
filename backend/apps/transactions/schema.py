@@ -706,11 +706,9 @@ class TransactionQuery:
             parent_transaction__isnull=True,
         )
 
-        total = float(txs.aggregate(s=Coalesce(Sum("amount"), Value(0.0), output_field=DecimalField()))["s"])
-        receivable = float(
-            txs.filter(is_receivable=True)
-            .aggregate(s=Coalesce(Sum("amount"), Value(0.0), output_field=DecimalField()))["s"]
-        )
+        zero = Value(Decimal("0"), output_field=DecimalField())
+        total = float(txs.aggregate(s=Coalesce(Sum("amount"), zero))["s"])
+        receivable = float(txs.filter(is_receivable=True).aggregate(s=Coalesce(Sum("amount"), zero))["s"])
         return InvoiceMonthSummary(total=total, receivable=receivable, personal=total - receivable)
 
 
