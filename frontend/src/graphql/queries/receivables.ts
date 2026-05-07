@@ -78,6 +78,7 @@ export const CREATE_RECEIPT_MUTATION = gql`
   }
 `;
 
+
 export const BULK_RECEIVE_MUTATION = gql`
   mutation BulkReceive($input: BulkReceiveInput!) {
     bulkReceive(input: $input)

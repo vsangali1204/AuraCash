@@ -54,6 +54,7 @@ class CreateReceiptInput:
     receipt_date: date
     destination_account_id: strawberry.ID
     notes: Optional[str] = None
+    defer_remaining_to_date: Optional[date] = None
 
 
 @strawberry.input
@@ -165,9 +166,10 @@ class ReceivableMutation:
             raise Exception("Conta destino não encontrada.")
 
         amount = Decimal(str(input.amount_received))
+        if amount <= Decimal("0"):
+            raise Exception("Valor deve ser positivo.")
+
         remaining = tx.amount - tx.received_amount
-        if amount > remaining:
-            raise Exception(f"Valor excede o restante pendente (R$ {remaining:.2f}).")
 
         receipt = Receipt.objects.create(
             transaction=tx,
@@ -179,7 +181,7 @@ class ReceivableMutation:
 
         TransactionModel.objects.create(
             user=user,
-            description=f"Recebimento: {tx.description} ({tx.debtor_name})",
+            description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
             amount=amount,
             transaction_type="income",
             payment_method="pix",
@@ -189,10 +191,38 @@ class ReceivableMutation:
             notes=input.notes,
         )
 
-        tx.received_amount += amount
-        tx.receipt_status = "received" if tx.received_amount >= tx.amount else "partial"
-        tx.save()
+        leftover = remaining - amount  # positivo = ainda falta; negativo = pagamento a mais
 
+        if leftover > Decimal("0") and input.defer_remaining_to_date:
+            # Pagamento parcial + adiamento: cria novo recebível pelo restante
+            TransactionModel.objects.create(
+                user=user,
+                description=tx.description,
+                amount=leftover,
+                transaction_type=tx.transaction_type,
+                payment_method=tx.payment_method,
+                date=input.defer_remaining_to_date,
+                competence_date=input.defer_remaining_to_date,
+                account=tx.account,
+                category=tx.category,
+                is_receivable=True,
+                debtor_name=tx.debtor_name,
+                receipt_status="pending",
+                received_amount=Decimal("0"),
+                notes=tx.notes,
+            )
+            tx.received_amount = tx.amount
+            tx.receipt_status = "received"
+        elif leftover <= Decimal("0"):
+            # Pagamento integral ou a mais: encerra o lançamento
+            tx.received_amount = tx.amount
+            tx.receipt_status = "received"
+        else:
+            # Pagamento parcial sem adiamento
+            tx.received_amount += amount
+            tx.receipt_status = "partial"
+
+        tx.save()
         return map_receipt(receipt)
 
     @strawberry.mutation

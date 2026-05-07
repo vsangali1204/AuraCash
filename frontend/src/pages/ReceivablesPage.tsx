@@ -1,7 +1,8 @@
 import { useMutation, useQuery } from "@apollo/client";
 import { useState, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import type { UseFormReturn } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
@@ -34,6 +35,7 @@ const receiptSchema = z.object({
   receiptDate: z.string().min(1, "Data obrigatória"),
   destinationAccountId: z.string().min(1, "Conta obrigatória"),
   notes: z.string().optional(),
+  deferRemainingToDate: z.string().optional(),
 });
 
 const bulkSchema = z.object({
@@ -57,12 +59,115 @@ const PERIOD_TABS: { value: Period; label: string; shortLabel: string; icon: Rea
 
 const NO_DEBTOR_KEY = "__sem_devedor__";
 
+type ReceiptModalFormProps = {
+  form: UseFormReturn<ReceiptFormData>;
+  onSubmit: (data: ReceiptFormData) => void;
+  accountOptions: { value: string; label: string }[];
+  receivingTx: Transaction;
+  deferRemaining: boolean;
+  setDeferRemaining: (v: boolean) => void;
+  registering: boolean;
+  onCancel: () => void;
+};
+
+function ReceiptModalForm({
+  form,
+  onSubmit,
+  accountOptions,
+  receivingTx,
+  deferRemaining,
+  setDeferRemaining,
+  registering,
+  onCancel,
+}: ReceiptModalFormProps) {
+  const watchedAmount = useWatch({ control: form.control, name: "amountReceived" });
+  const parsedAmount = Number(watchedAmount) || 0;
+  const leftover = receivingTx.remainingAmount - parsedAmount;
+  const isPartial = parsedAmount > 0 && leftover > 0;
+  const isOverpayment = parsedAmount > receivingTx.remainingAmount;
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+      <Input
+        label="Valor recebido (R$)"
+        type="number"
+        step="0.01"
+        error={form.formState.errors.amountReceived?.message}
+        {...form.register("amountReceived")}
+      />
+      <Input
+        label="Data do recebimento"
+        type="date"
+        error={form.formState.errors.receiptDate?.message}
+        {...form.register("receiptDate")}
+      />
+      <Select
+        label="Conta destino"
+        options={accountOptions}
+        placeholder="Selecione"
+        error={form.formState.errors.destinationAccountId?.message}
+        {...form.register("destinationAccountId")}
+      />
+      <Input label="Observação (opcional)" {...form.register("notes")} />
+
+      {/* Pagamento parcial — opção de adiar restante */}
+      {isPartial && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/8 p-3 space-y-2.5">
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={deferRemaining}
+              onChange={(e) => setDeferRemaining(e.target.checked)}
+              className="h-4 w-4 rounded border-surface-border bg-surface accent-amber-500 cursor-pointer"
+            />
+            <span className="text-sm text-amber-300">
+              Adiar saldo restante{" "}
+              <span className="font-semibold">({formatCurrency(leftover)})</span>{" "}
+              para o próximo mês
+            </span>
+          </label>
+          {deferRemaining && (
+            <Input
+              label="Data de previsão do restante"
+              type="date"
+              {...form.register("deferRemainingToDate")}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Pagamento a mais */}
+      {isOverpayment && (
+        <div className="rounded-xl border border-blue-500/25 bg-blue-500/8 px-3 py-2.5">
+          <p className="text-xs text-blue-300">
+            Valor acima do pendente —{" "}
+            <span className="font-semibold">
+              {formatCurrency(receivingTx.remainingAmount)}
+            </span>{" "}
+            serão registrados e o lançamento será encerrado.
+          </p>
+        </div>
+      )}
+
+      <div className="flex gap-3 pt-1">
+        <Button type="button" variant="secondary" className="flex-1" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="flex-1" loading={registering}>
+          Registrar
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function ReceivablesPage() {
   const [period, setPeriod] = useState<Period>("next_month");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [debtorFilter, setDebtorFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [receivingTx, setReceivingTx] = useState<Transaction | null>(null);
+  const [deferRemaining, setDeferRemaining] = useState(false);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkPersonLabel, setBulkPersonLabel] = useState<string | null>(null);
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
@@ -87,6 +192,11 @@ export function ReceivablesPage() {
   const now = new Date();
   const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
   const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+
+  function getNextMonthISO(): string {
+    const d = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return d.toISOString().split("T")[0];
+  }
 
   function isNextMonth(tx: Transaction) {
     if (!tx.competenceDate) return false;
@@ -177,7 +287,7 @@ export function ReceivablesPage() {
 
   const [createReceipt, { loading: registering }] = useMutation(CREATE_RECEIPT_MUTATION, {
     refetchQueries: refetchVars,
-    onCompleted: () => { toast.success("Recebimento registrado!"); setReceivingTx(null); },
+    onCompleted: () => { toast.success("Recebimento registrado!"); setReceivingTx(null); setDeferRemaining(false); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -204,10 +314,12 @@ export function ReceivablesPage() {
 
   function openReceipt(tx: Transaction) {
     setReceivingTx(tx);
+    setDeferRemaining(false);
     receiptForm.reset({
       amountReceived: tx.remainingAmount,
       receiptDate: todayISO(),
       destinationAccountId: accounts[0]?.id ?? "",
+      deferRemainingToDate: getNextMonthISO(),
     });
   }
 
@@ -224,14 +336,20 @@ export function ReceivablesPage() {
 
   function onReceiptSubmit(data: ReceiptFormData) {
     if (!receivingTx) return;
+    const parsedAmount = Number(data.amountReceived);
+    const isPartial = parsedAmount < receivingTx.remainingAmount;
     createReceipt({
       variables: {
         input: {
           transactionId: receivingTx.id,
-          amountReceived: data.amountReceived,
+          amountReceived: parsedAmount,
           receiptDate: data.receiptDate,
           destinationAccountId: data.destinationAccountId,
           notes: data.notes || null,
+          deferRemainingToDate:
+            isPartial && deferRemaining && data.deferRemainingToDate
+              ? data.deferRemainingToDate
+              : null,
         },
       },
     });
@@ -706,26 +824,16 @@ export function ReceivablesPage() {
               )}
             </div>
 
-            <form onSubmit={receiptForm.handleSubmit(onReceiptSubmit)} className="space-y-3">
-              <Input label="Valor recebido (R$)" type="number" step="0.01"
-                error={receiptForm.formState.errors.amountReceived?.message}
-                {...receiptForm.register("amountReceived")} />
-              <Input label="Data do recebimento" type="date"
-                error={receiptForm.formState.errors.receiptDate?.message}
-                {...receiptForm.register("receiptDate")} />
-              <Select label="Conta destino" options={accountOptions} placeholder="Selecione"
-                error={receiptForm.formState.errors.destinationAccountId?.message}
-                {...receiptForm.register("destinationAccountId")} />
-              <Input label="Observação (opcional)" {...receiptForm.register("notes")} />
-              <div className="flex gap-3 pt-1">
-                <Button type="button" variant="secondary" className="flex-1" onClick={() => setReceivingTx(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="flex-1" loading={registering}>
-                  Registrar
-                </Button>
-              </div>
-            </form>
+            <ReceiptModalForm
+              form={receiptForm}
+              onSubmit={onReceiptSubmit}
+              accountOptions={accountOptions}
+              receivingTx={receivingTx}
+              deferRemaining={deferRemaining}
+              setDeferRemaining={setDeferRemaining}
+              registering={registering}
+              onCancel={() => setReceivingTx(null)}
+            />
           </div>
         )}
       </Modal>
