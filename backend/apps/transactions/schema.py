@@ -701,9 +701,8 @@ class TransactionQuery:
         ).values_list("id", flat=True)
 
         txs = Transaction.objects.filter(
-            user=user,
+            credit_card__user=user,
             invoice_id__in=invoice_ids,
-            parent_transaction__isnull=True,
         )
 
         zero = Value(Decimal("0"), output_field=DecimalField())
