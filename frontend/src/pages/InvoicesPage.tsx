@@ -13,7 +13,6 @@ import {
   Tag,
   Receipt,
   Calendar,
-  TrendingUp,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -455,6 +454,29 @@ export function InvoicesPage() {
           {/* Lista de lançamentos */}
           {selectedInvoice && (
             <div>
+              {/* Totais — acima da lista */}
+              {!txLoading && transactions.length > 0 && (() => {
+                const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
+                const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
+                const totalMeu = totalFatura - totalReceber;
+                return (
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Total da fatura", value: totalFatura, color: "text-white" },
+                      { label: "A receber",        value: totalReceber, color: "text-amber-400" },
+                      { label: "Total meu",        value: totalMeu,    color: "text-sky-400" },
+                    ].map((stat) => (
+                      <div key={stat.label} className="flex flex-col gap-0.5 rounded-xl border border-surface-border bg-surface-card p-3">
+                        <p className="text-[11px] text-gray-500">{stat.label}</p>
+                        <p className={cn("text-sm font-bold tabular-nums", stat.color)}>
+                          {formatCurrency(stat.value)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white">Lançamentos</p>
                 {!txLoading && (
@@ -550,28 +572,6 @@ export function InvoicesPage() {
                     ))}
                   </div>
 
-                  {/* Totais da fatura */}
-                  {(() => {
-                    const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
-                    const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
-                    const totalMeu = totalFatura - totalReceber;
-                    return (
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        {[
-                          { label: "Total da fatura", value: totalFatura, color: "text-white", icon: TrendingUp, iconColor: "text-red-400" },
-                          { label: "A receber", value: totalReceber, color: "text-amber-400", icon: null, dot: "bg-amber-400" },
-                          { label: "Total meu", value: totalMeu, color: "text-sky-400", icon: null, dot: "bg-sky-400" },
-                        ].map((stat) => (
-                          <div key={stat.label} className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
-                            <p className="text-[11px] text-gray-500 leading-tight">{stat.label}</p>
-                            <p className={cn("text-sm font-bold tabular-nums", stat.color)}>
-                              {formatCurrency(stat.value)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
                 </>
               )}
             </div>
