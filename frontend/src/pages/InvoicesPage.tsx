@@ -129,16 +129,34 @@ export function InvoicesPage() {
   const currentYM = getMonthYM(today.getFullYear(), today.getMonth() + 1);
 
   const metrics = useMemo(() => {
-    const totalOpen = allInvoices
-      .filter((inv) => ["open", "partial", "closed"].includes(inv.status))
-      .reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
-    const dueSoon = allInvoices
-      .filter((inv) => inv.status !== "paid" && inv.dueDate.startsWith(currentYM))
-      .reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
-    const paidThisMonth = allInvoices
-      .filter((inv) => inv.status === "paid" && inv.referenceMonth.startsWith(currentYM))
-      .reduce((sum, inv) => sum + inv.totalAmount, 0);
-    return { totalOpen, dueSoon, paidThisMonth };
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    // Em aberto
+    const openInvoices = allInvoices.filter((inv) => ["open", "partial", "closed"].includes(inv.status));
+    const totalOpen = openInvoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
+    const openCount = openInvoices.length;
+    const openCardsCount = new Set(openInvoices.map((i) => i.creditCardId)).size;
+
+    // Vence este mês
+    const dueInvoices = allInvoices.filter((inv) => inv.status !== "paid" && inv.dueDate.startsWith(currentYM));
+    const dueSoon = dueInvoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
+    const dueSoonCount = dueInvoices.length;
+    const overdueCount = dueInvoices.filter((inv) => inv.dueDate < todayStr).length;
+    const nextDueDate = [...dueInvoices]
+      .filter((inv) => inv.dueDate >= todayStr)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0]?.dueDate ?? null;
+
+    // Pago este mês
+    const paidInvoices = allInvoices.filter((inv) => inv.status === "paid" && inv.referenceMonth.startsWith(currentYM));
+    const paidThisMonth = paidInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const paidCount = paidInvoices.length;
+    const totalThisMonthCount = allInvoices.filter((inv) => inv.referenceMonth.startsWith(currentYM)).length;
+
+    return {
+      totalOpen, openCount, openCardsCount,
+      dueSoon, dueSoonCount, overdueCount, nextDueDate,
+      paidThisMonth, paidCount, totalThisMonthCount,
+    };
   }, [allInvoices, currentYM]);
 
   const groupedTxs = useMemo(() => {
@@ -188,22 +206,82 @@ export function InvoicesPage() {
       </div>
 
       {/* Métricas resumo */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        {[
-          { label: "Total em aberto", value: metrics.totalOpen, icon: Clock, iconBg: "bg-blue-500/15", iconColor: "text-blue-400", valueColor: "text-blue-300" },
-          { label: "Vence este mês",  value: metrics.dueSoon,   icon: AlertCircle, iconBg: "bg-amber-500/15", iconColor: "text-amber-400", valueColor: "text-amber-300" },
-          { label: "Pago este mês",   value: metrics.paidThisMonth, icon: CheckCircle2, iconBg: "bg-emerald-500/15", iconColor: "text-emerald-400", valueColor: "text-emerald-300" },
-        ].map((m) => (
-          <div key={m.label} className="flex flex-col gap-1.5 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-            <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", m.iconBg)}>
-              <m.icon size={14} className={m.iconColor} />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+        {/* Card 1 — Total em aberto */}
+        <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/15">
+              <Clock size={14} className="text-blue-400" />
             </div>
-            <p className="text-[11px] leading-tight text-gray-500">{m.label}</p>
-            <p className={cn("text-sm font-bold tabular-nums sm:text-base", m.valueColor)}>
-              {formatCurrency(m.value)}
-            </p>
+            {metrics.openCount > 0 && (
+              <span className="text-[11px] text-gray-500">
+                {metrics.openCount} fatura{metrics.openCount !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
-        ))}
+          <p className="text-[11px] text-gray-500">Total em aberto</p>
+          <p className="text-base font-bold tabular-nums text-blue-300 sm:text-lg">
+            {formatCurrency(metrics.totalOpen)}
+          </p>
+          <p className="text-[11px] text-gray-600">
+            {metrics.openCardsCount > 0
+              ? `em ${metrics.openCardsCount} cartão${metrics.openCardsCount !== 1 ? "ões" : ""}`
+              : "Nenhuma fatura em aberto"}
+          </p>
+        </div>
+
+        {/* Card 2 — Vence este mês */}
+        <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15">
+              <AlertCircle size={14} className="text-amber-400" />
+            </div>
+            {metrics.overdueCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-400">
+                {metrics.overdueCount} em atraso
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-500">Vence este mês</p>
+          <p className="text-base font-bold tabular-nums text-amber-300 sm:text-lg">
+            {formatCurrency(metrics.dueSoon)}
+          </p>
+          <p className="text-[11px] text-gray-600">
+            {metrics.dueSoonCount === 0
+              ? "Nenhuma fatura vencendo"
+              : metrics.nextDueDate
+                ? `próx. venc. ${formatDate(metrics.nextDueDate)}`
+                : `${metrics.dueSoonCount} fatura${metrics.dueSoonCount !== 1 ? "s" : ""} vencendo`}
+          </p>
+        </div>
+
+        {/* Card 3 — Pago este mês */}
+        <div className="flex flex-col gap-2 rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15">
+              <CheckCircle2 size={14} className="text-emerald-400" />
+            </div>
+            {metrics.totalThisMonthCount > 0 && (
+              <span className="text-[11px] text-gray-500">
+                {metrics.paidCount}/{metrics.totalThisMonthCount} quitadas
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-500">Pago este mês</p>
+          <p className="text-base font-bold tabular-nums text-emerald-300 sm:text-lg">
+            {formatCurrency(metrics.paidThisMonth)}
+          </p>
+          {metrics.totalThisMonthCount > 0 && (
+            <div>
+              <div className="h-1 rounded-full bg-surface-border overflow-hidden">
+                <div
+                  className="h-1 rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${(metrics.paidCount / metrics.totalThisMonthCount) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Seletor de cartões — cards maiores */}
