@@ -312,7 +312,8 @@ export function ReceivablesPage() {
   const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
 
   function getNextMonthISO(): string {
-    const d = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const d = new Date(now);
+    d.setDate(d.getDate() + 30);
     return d.toISOString().split("T")[0];
   }
 
