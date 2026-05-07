@@ -109,10 +109,10 @@ export function InvoicesPage() {
   });
   const cardInvoices = cardInvData?.invoices ?? [];
 
-  // Meses disponíveis (chips de histórico), mais recentes primeiro
+  // Meses disponíveis (chips de histórico), ordem crescente (mais antigo → mais recente)
   const invoiceMonths = useMemo(() =>
     [...cardInvoices]
-      .sort((a, b) => b.referenceMonth.localeCompare(a.referenceMonth))
+      .sort((a, b) => a.referenceMonth.localeCompare(b.referenceMonth))
       .map((inv) => ({ ym: inv.referenceMonth.slice(0, 7), status: inv.status })),
     [cardInvoices]
   );
@@ -223,7 +223,10 @@ export function InvoicesPage() {
         <div className="flex gap-3 overflow-x-auto pb-1">
           {cards.map((card) => {
             const isActive = card.id === effectiveCardId;
-            const inv = card.currentInvoice;
+            // Mostra a fatura do mês selecionado, não necessariamente a vigente
+            const inv = allInvoices.find(
+              (i) => i.creditCardId === card.id && i.referenceMonth.startsWith(selectedMonthYM)
+            ) ?? card.currentInvoice;
             const cardUsed = card.totalLimit - card.availableLimit;
             const cardUsedPct = card.totalLimit > 0 ? Math.min(100, (cardUsed / card.totalLimit) * 100) : 0;
 
@@ -232,51 +235,53 @@ export function InvoicesPage() {
                 key={card.id}
                 onClick={() => setSelectedCardId(card.id)}
                 className={cn(
-                  "flex w-52 shrink-0 flex-col gap-3 rounded-xl border p-4 text-left transition-all",
+                  "flex w-56 shrink-0 flex-col gap-3 rounded-xl border p-4 text-left transition-all",
                   isActive
                     ? "border-sky-500/40 bg-sky-500/10"
                     : "border-surface-border bg-surface-card hover:border-sky-500/20"
                 )}
               >
-                {/* Nome + bandeira */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={cn(
-                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-                      isActive ? "bg-sky-500/20" : "bg-surface"
-                    )}>
-                      <CardIcon size={13} className={isActive ? "text-sky-400" : "text-gray-500"} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className={cn("truncate text-sm font-semibold", isActive ? "text-white" : "text-gray-300")}>
-                        {card.name}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        {CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand}
-                      </p>
-                    </div>
+                {/* Ícone + nome (linha própria para não cortar) */}
+                <div className="flex items-start gap-2">
+                  <div className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg mt-0.5",
+                    isActive ? "bg-sky-500/20" : "bg-surface"
+                  )}>
+                    <CardIcon size={13} className={isActive ? "text-sky-400" : "text-gray-500"} />
                   </div>
-                  {inv && <StatusBadge status={inv.status} />}
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-sm font-semibold leading-tight break-words", isActive ? "text-white" : "text-gray-300")}>
+                      {card.name}
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Valor da fatura */}
+                {/* Fatura do mês selecionado */}
                 {inv ? (
-                  <div>
-                    <p className="text-[11px] text-gray-500 mb-0.5">Fatura atual</p>
-                    <p className={cn("text-xl font-bold tabular-nums", isActive ? "text-white" : "text-gray-200")}>
-                      {formatCurrency(inv.totalAmount)}
-                    </p>
-                    {inv.status !== "paid" && inv.paidAmount > 0 && (
-                      <p className="text-[11px] text-amber-400 mt-0.5">
-                        falta {formatCurrency(inv.totalAmount - inv.paidAmount)}
+                  <div className="flex items-end justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] text-gray-500 mb-0.5">
+                        {formatMonthYear(inv.referenceMonth)}
                       </p>
-                    )}
+                      <p className={cn("text-xl font-bold tabular-nums", isActive ? "text-white" : "text-gray-200")}>
+                        {formatCurrency(inv.totalAmount)}
+                      </p>
+                      {inv.status !== "paid" && inv.paidAmount > 0 && (
+                        <p className="text-[11px] text-amber-400 mt-0.5">
+                          falta {formatCurrency(inv.totalAmount - inv.paidAmount)}
+                        </p>
+                      )}
+                    </div>
+                    <StatusBadge status={inv.status} />
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-600 italic">Sem fatura no ciclo</p>
+                  <p className="text-xs text-gray-600 italic">Sem fatura neste mês</p>
                 )}
 
-                {/* Limite */}
+                {/* Barra de limite */}
                 <div>
                   <div className="h-1.5 rounded-full bg-surface-border overflow-hidden">
                     <div
@@ -506,14 +511,24 @@ export function InvoicesPage() {
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium leading-snug text-white">
-                                  {tx.description}
-                                </p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="truncate text-sm font-medium leading-snug text-white">
+                                    {tx.description}
+                                  </p>
+                                  {tx.isReceivable && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+                                      ↩ a receber
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                   {tx.category && (
                                     <span className="text-xs font-medium" style={{ color: tx.category.color }}>
                                       {tx.category.name}
                                     </span>
+                                  )}
+                                  {tx.isReceivable && tx.debtorName && (
+                                    <span className="text-xs text-amber-500/70">{tx.debtorName}</span>
                                   )}
                                   {tx.installmentNumber && tx.totalInstallments && (
                                     <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-gray-400">
@@ -522,7 +537,10 @@ export function InvoicesPage() {
                                   )}
                                 </div>
                               </div>
-                              <p className="shrink-0 text-sm font-bold tabular-nums text-red-400">
+                              <p className={cn(
+                                "shrink-0 text-sm font-bold tabular-nums",
+                                tx.isReceivable ? "text-amber-400" : "text-red-400"
+                              )}>
                                 {formatCurrency(tx.amount)}
                               </p>
                             </div>
@@ -532,17 +550,34 @@ export function InvoicesPage() {
                     ))}
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between rounded-xl border border-surface-border bg-surface-card px-4 py-3">
-                    <p className="text-sm text-gray-500">
-                      {transactions.length} lançamento{transactions.length !== 1 ? "s" : ""}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <TrendingUp size={14} className="text-red-400" />
-                      <p className="text-sm font-bold tabular-nums text-white">
-                        {formatCurrency(transactions.reduce((s, t) => s + t.amount, 0))}
-                      </p>
-                    </div>
-                  </div>
+                  {/* Totais da fatura */}
+                  {(() => {
+                    const totalFatura = transactions.reduce((s, t) => s + t.amount, 0);
+                    const totalReceber = transactions.filter((t) => t.isReceivable).reduce((s, t) => s + t.amount, 0);
+                    const totalMeu = totalFatura - totalReceber;
+                    return (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {[
+                          { label: "Total da fatura", value: totalFatura, color: "text-white", icon: TrendingUp, iconColor: "text-red-400" },
+                          { label: "A receber", value: totalReceber, color: "text-amber-400", icon: null, dot: "bg-amber-400" },
+                          { label: "Total meu", value: totalMeu, color: "text-sky-400", icon: null, dot: "bg-sky-400" },
+                        ].map((stat) => (
+                          <div key={stat.label} className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
+                            <div className="flex items-center gap-1.5">
+                              {stat.icon
+                                ? <stat.icon size={12} className={stat.iconColor} />
+                                : <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", stat.dot)} />
+                              }
+                              <p className="text-[11px] text-gray-500 leading-tight">{stat.label}</p>
+                            </div>
+                            <p className={cn("text-sm font-bold tabular-nums", stat.color)}>
+                              {formatCurrency(stat.value)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
