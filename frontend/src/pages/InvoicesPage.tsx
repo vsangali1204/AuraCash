@@ -131,7 +131,7 @@ export function InvoicesPage() {
   const cardInvoices = cardInvData?.invoices ?? [];
 
   const selectedMonthYM = getMonthYM(navMonth.year, navMonth.month);
-  const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth === selectedMonthYM) ?? null;
+  const selectedInvoice = cardInvoices.find((inv) => inv.referenceMonth.startsWith(selectedMonthYM)) ?? null;
 
   const { data: txData, loading: txLoading } = useQuery<{ invoiceTransactions: Transaction[] }>(
     INVOICE_TRANSACTIONS_QUERY,
@@ -290,7 +290,9 @@ export function InvoicesPage() {
                     {card.name}
                   </p>
                   <p className="truncate text-[11px] text-gray-500">
-                    {CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand}
+                    {card.currentInvoice
+                      ? formatCurrency(card.currentInvoice.totalAmount)
+                      : (CREDIT_CARD_BRAND_LABELS[card.brand] ?? card.brand)}
                   </p>
                 </div>
                 {hasPending && (
