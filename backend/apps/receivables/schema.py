@@ -63,6 +63,7 @@ class BulkReceiveInput:
     receipt_date: date
     destination_account_id: strawberry.ID
     notes: Optional[str] = None
+    total_amount: Optional[float] = None  # se informado, rateia proporcionalmente
 
 
 @strawberry.type
@@ -229,7 +230,7 @@ class ReceivableMutation:
     def bulk_receive(
         self, info: strawberry.types.Info, input: BulkReceiveInput
     ) -> int:
-        """Recebe o saldo pendente de múltiplas transações de uma vez. Retorna quantas foram processadas."""
+        """Recebe lançamentos em lote. Se total_amount for informado, rateia proporcionalmente."""
         from apps.accounts.models import Account
 
         user = require_auth(info)
@@ -238,43 +239,97 @@ class ReceivableMutation:
         if not dest_account:
             raise Exception("Conta destino não encontrada.")
 
-        count = 0
+        # Carrega todas as transações válidas de uma vez
+        txs = []
         for tx_id in input.transaction_ids:
             tx = TransactionModel.objects.filter(
                 id=tx_id, user=user, is_receivable=True
             ).first()
             if not tx or tx.receipt_status == "received":
                 continue
-
-            amount = tx.amount - tx.received_amount
-            if amount <= Decimal("0"):
+            remaining = tx.amount - tx.received_amount
+            if remaining <= Decimal("0"):
                 continue
+            txs.append((tx, remaining))
 
-            Receipt.objects.create(
-                transaction=tx,
-                amount_received=amount,
-                receipt_date=input.receipt_date,
-                destination_account=dest_account,
-                notes=input.notes,
-            )
+        if not txs:
+            return 0
 
-            TransactionModel.objects.create(
-                user=user,
-                description=f"Recebimento: {tx.description} ({tx.debtor_name})",
-                amount=amount,
-                transaction_type="income",
-                payment_method="pix",
-                date=input.receipt_date,
-                account=dest_account,
-                category=tx.category,
-            )
+        if input.total_amount is not None:
+            # ── Rateio proporcional ──────────────────────────────────────────
+            total_to_distribute = Decimal(str(input.total_amount))
+            if total_to_distribute <= Decimal("0"):
+                raise Exception("Valor deve ser positivo.")
 
-            tx.received_amount += amount
-            tx.receipt_status = "received"
-            tx.save()
-            count += 1
+            total_pending = sum(r for _, r in txs)
+            distributed = Decimal("0")
+            count = 0
 
-        return count
+            for i, (tx, remaining) in enumerate(txs):
+                # Última transação absorve o arredondamento
+                if i == len(txs) - 1:
+                    prorated = total_to_distribute - distributed
+                else:
+                    prorated = (remaining / total_pending * total_to_distribute).quantize(Decimal("0.01"))
+
+                if prorated <= Decimal("0"):
+                    continue
+
+                # Não ultrapassa o que falta na transação
+                prorated = min(prorated, remaining)
+
+                Receipt.objects.create(
+                    transaction=tx,
+                    amount_received=prorated,
+                    receipt_date=input.receipt_date,
+                    destination_account=dest_account,
+                    notes=input.notes,
+                )
+                TransactionModel.objects.create(
+                    user=user,
+                    description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
+                    amount=prorated,
+                    transaction_type="income",
+                    payment_method="pix",
+                    date=input.receipt_date,
+                    account=dest_account,
+                    category=tx.category,
+                )
+                tx.received_amount += prorated
+                tx.receipt_status = "received" if tx.received_amount >= tx.amount else "partial"
+                tx.save()
+                distributed += prorated
+                count += 1
+
+            return count
+
+        else:
+            # ── Pagamento integral do pendente de cada transação ─────────────
+            count = 0
+            for tx, remaining in txs:
+                Receipt.objects.create(
+                    transaction=tx,
+                    amount_received=remaining,
+                    receipt_date=input.receipt_date,
+                    destination_account=dest_account,
+                    notes=input.notes,
+                )
+                TransactionModel.objects.create(
+                    user=user,
+                    description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
+                    amount=remaining,
+                    transaction_type="income",
+                    payment_method="pix",
+                    date=input.receipt_date,
+                    account=dest_account,
+                    category=tx.category,
+                )
+                tx.received_amount += remaining
+                tx.receipt_status = "received"
+                tx.save()
+                count += 1
+
+            return count
 
     @strawberry.mutation
     def delete_receipt(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:

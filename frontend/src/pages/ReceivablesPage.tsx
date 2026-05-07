@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery, useLazyQuery } from "@apollo/client";
 import { useState, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
@@ -22,13 +22,14 @@ import {
   CREATE_RECEIPT_MUTATION,
   BULK_RECEIVE_MUTATION,
   RECEIVABLE_SUMMARY_QUERY,
+  RECEIPTS_QUERY,
 } from "@/graphql/queries/receivables";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
   cn, formatCurrency, formatDate,
   RECEIPT_STATUS_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
-import type { Account, Transaction } from "@/types";
+import type { Account, Transaction, Receipt } from "@/types";
 
 const receiptSchema = z.object({
   amountReceived: z.coerce.number().positive("Valor positivo"),
@@ -42,6 +43,7 @@ const bulkSchema = z.object({
   receiptDate: z.string().min(1, "Data obrigatória"),
   destinationAccountId: z.string().min(1, "Conta obrigatória"),
   notes: z.string().optional(),
+  totalAmount: z.coerce.number().positive("Valor positivo").optional().or(z.literal("")),
 });
 
 type ReceiptFormData = z.infer<typeof receiptSchema>;
@@ -161,6 +163,113 @@ function ReceiptModalForm({
   );
 }
 
+type BulkReceiveFormProps = {
+  form: UseFormReturn<BulkFormData>;
+  onSubmit: (data: BulkFormData) => void;
+  accountOptions: { value: string; label: string }[];
+  selectedCount: number;
+  selectedAmount: number;
+  bulkPersonLabel: string | null;
+  bulkLoading: boolean;
+  onCancel: () => void;
+};
+
+function BulkReceiveForm({
+  form,
+  onSubmit,
+  accountOptions,
+  selectedCount,
+  selectedAmount,
+  bulkPersonLabel,
+  bulkLoading,
+  onCancel,
+}: BulkReceiveFormProps) {
+  const watchedTotal = useWatch({ control: form.control, name: "totalAmount" });
+  const parsedTotal = watchedTotal !== "" ? Number(watchedTotal) || 0 : 0;
+  const isProrated = parsedTotal > 0;
+  const exceedsTotal = parsedTotal > selectedAmount;
+
+  return (
+    <div className="space-y-4">
+      {/* Resumo */}
+      <div className="rounded-xl bg-surface border border-surface-border p-4 space-y-2">
+        {bulkPersonLabel && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">Devedor:</span>
+            <span className="text-sm font-semibold text-amber-400">{bulkPersonLabel}</span>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <p className="text-gray-500">Lançamentos</p>
+            <p className="text-lg font-bold text-white">{selectedCount}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Total pendente</p>
+            <p className="text-lg font-bold text-amber-400">{formatCurrency(selectedAmount)}</p>
+          </div>
+        </div>
+
+        {/* Preview do rateio */}
+        {isProrated && !exceedsTotal && (
+          <div className="mt-1 rounded-lg bg-sky-500/8 border border-sky-500/20 px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold text-sky-300">Rateio proporcional</p>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Valor a distribuir</span>
+              <span className="font-semibold text-white">{formatCurrency(parsedTotal)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Saldo após pagamento</span>
+              <span className="font-semibold text-amber-400">{formatCurrency(selectedAmount - parsedTotal)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Média por lançamento</span>
+              <span className="font-medium text-gray-300">{formatCurrency(parsedTotal / selectedCount)}</span>
+            </div>
+          </div>
+        )}
+        {exceedsTotal && (
+          <p className="text-xs text-amber-400 mt-1">
+            Valor acima do total pendente — será tratado como pagamento integral.
+          </p>
+        )}
+        {!isProrated && (
+          <p className="text-xs text-gray-600">
+            Sem valor informado: cada lançamento será quitado integralmente.
+          </p>
+        )}
+      </div>
+
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+        <Input
+          label="Valor a distribuir (R$) — opcional"
+          type="number"
+          step="0.01"
+          placeholder={`máx. ${formatCurrency(selectedAmount)}`}
+          error={form.formState.errors.totalAmount?.message as string | undefined}
+          {...form.register("totalAmount")}
+        />
+        <Input label="Data do recebimento" type="date"
+          error={form.formState.errors.receiptDate?.message}
+          {...form.register("receiptDate")} />
+        <Select label="Conta destino" options={accountOptions} placeholder="Selecione"
+          error={form.formState.errors.destinationAccountId?.message}
+          {...form.register("destinationAccountId")} />
+        <Input label="Observação (opcional)" {...form.register("notes")} />
+        <div className="flex gap-3 pt-1">
+          <Button type="button" variant="secondary" className="flex-1" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button type="submit" className="flex-1" loading={bulkLoading}>
+            <DollarSign size={14} />
+            {isProrated && !exceedsTotal ? "Distribuir" : "Confirmar"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function ReceivablesPage() {
   const [period, setPeriod] = useState<Period>("next_month");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -168,6 +277,7 @@ export function ReceivablesPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [receivingTx, setReceivingTx] = useState<Transaction | null>(null);
   const [deferRemaining, setDeferRemaining] = useState(false);
+  const [historyTx, setHistoryTx] = useState<Transaction | null>(null);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkPersonLabel, setBulkPersonLabel] = useState<string | null>(null);
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
@@ -183,6 +293,14 @@ export function ReceivablesPage() {
   );
 
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
+
+  const [fetchReceipts, { data: receiptsData, loading: receiptsLoading }] =
+    useLazyQuery<{ receipts: Receipt[] }>(RECEIPTS_QUERY, { fetchPolicy: "network-only" });
+
+  function openHistory(tx: Transaction) {
+    setHistoryTx(tx);
+    fetchReceipts({ variables: { transactionId: tx.id } });
+  }
 
   const transactions = txData?.receivableTransactions ?? [];
   const allTxs = summaryData?.receivableTransactions ?? [];
@@ -356,6 +474,7 @@ export function ReceivablesPage() {
   }
 
   function onBulkSubmit(data: BulkFormData) {
+    const totalAmount = data.totalAmount !== "" && data.totalAmount ? Number(data.totalAmount) : null;
     bulkReceive({
       variables: {
         input: {
@@ -363,6 +482,7 @@ export function ReceivablesPage() {
           receiptDate: data.receiptDate,
           destinationAccountId: data.destinationAccountId,
           notes: data.notes || null,
+          totalAmount,
         },
       },
     });
@@ -470,16 +590,28 @@ export function ReceivablesPage() {
               </div>
             )}
 
-            {/* Linha 4: botão receber — full-width no mobile */}
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => openReceipt(tx)}
-              className="w-full sm:w-auto"
-            >
-              <DollarSign size={13} />
-              {isPartial ? "Registrar novo recebimento" : "Registrar recebimento"}
-            </Button>
+            {/* Linha 4: ações */}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => openReceipt(tx)}
+                className="flex-1 sm:flex-none"
+              >
+                <DollarSign size={13} />
+                {isPartial ? "Novo recebimento" : "Registrar recebimento"}
+              </Button>
+              {isPartial && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => openHistory(tx)}
+                  className="flex-1 sm:flex-none"
+                >
+                  Histórico
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -838,6 +970,61 @@ export function ReceivablesPage() {
         )}
       </Modal>
 
+      {/* Modal — Histórico de recebimentos */}
+      <Modal
+        open={!!historyTx}
+        onClose={() => setHistoryTx(null)}
+        title="Histórico de recebimentos"
+        size="sm"
+      >
+        {historyTx && (
+          <div className="space-y-3">
+            <div className="rounded-xl bg-surface border border-surface-border p-3 space-y-1">
+              <p className="text-sm font-semibold text-white">{historyTx.description}</p>
+              {historyTx.debtorName && (
+                <p className="text-xs text-amber-400">{historyTx.debtorName}</p>
+              )}
+              <div className="flex gap-4 text-xs mt-1">
+                <span className="text-gray-500">Total: <span className="text-white font-medium">{formatCurrency(historyTx.amount)}</span></span>
+                <span className="text-gray-500">Recebido: <span className="text-emerald-400 font-medium">{formatCurrency(historyTx.receivedAmount)}</span></span>
+                <span className="text-gray-500">Pendente: <span className="text-amber-400 font-medium">{formatCurrency(historyTx.remainingAmount)}</span></span>
+              </div>
+              <div className="mt-2 h-1.5 rounded-full bg-surface-border">
+                <div
+                  className="h-1.5 rounded-full bg-emerald-500"
+                  style={{ width: `${Math.min(100, (historyTx.receivedAmount / historyTx.amount) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            {receiptsLoading ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-surface-card" />)}
+              </div>
+            ) : receiptsData?.receipts.length === 0 ? (
+              <p className="text-center text-sm text-gray-500 py-4">Nenhum recebimento registrado.</p>
+            ) : (
+              <div className="space-y-2">
+                {receiptsData?.receipts.map((r) => (
+                  <div key={r.id} className="rounded-lg border border-surface-border bg-surface-card px-3 py-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-emerald-400">{formatCurrency(r.amountReceived)}</span>
+                      <span className="text-xs text-gray-400">{formatDate(r.receiptDate)}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{r.destinationAccountName}</p>
+                    {r.notes && <p className="text-xs text-gray-600 mt-0.5 italic">{r.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button variant="secondary" className="w-full" onClick={() => setHistoryTx(null)}>
+              Fechar
+            </Button>
+          </div>
+        )}
+      </Modal>
+
       {/* Modal — Receber em lote */}
       <Modal
         open={bulkModalOpen}
@@ -845,50 +1032,16 @@ export function ReceivablesPage() {
         title="Receber em lote"
         size="sm"
       >
-        <div className="space-y-4">
-          <div className="rounded-xl bg-surface border border-surface-border p-4 space-y-2">
-            {bulkPersonLabel && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Devedor:</span>
-                <span className="text-sm font-semibold text-amber-400">{bulkPersonLabel}</span>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <p className="text-gray-500">Recebimentos</p>
-                <p className="text-lg font-bold text-white">{selected.size}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Valor total</p>
-                <p className="text-lg font-bold text-emerald-400">{formatCurrency(selectedAmount)}</p>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600">
-              Cada lançamento será recebido pelo seu saldo pendente integral.
-            </p>
-          </div>
-
-          <form onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="space-y-3">
-            <Input label="Data do recebimento" type="date"
-              error={bulkForm.formState.errors.receiptDate?.message}
-              {...bulkForm.register("receiptDate")} />
-            <Select label="Conta destino" options={accountOptions} placeholder="Selecione"
-              error={bulkForm.formState.errors.destinationAccountId?.message}
-              {...bulkForm.register("destinationAccountId")} />
-            <Input label="Observação (opcional)" {...bulkForm.register("notes")} />
-            <div className="flex gap-3 pt-1">
-              <Button
-                type="button" variant="secondary" className="flex-1"
-                onClick={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" className="flex-1" loading={bulkLoading}>
-                <DollarSign size={14} /> Confirmar
-              </Button>
-            </div>
-          </form>
-        </div>
+        <BulkReceiveForm
+          form={bulkForm}
+          onSubmit={onBulkSubmit}
+          accountOptions={accountOptions}
+          selectedCount={selected.size}
+          selectedAmount={selectedAmount}
+          bulkPersonLabel={bulkPersonLabel}
+          bulkLoading={bulkLoading}
+          onCancel={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}
+        />
       </Modal>
     </div>
   );
