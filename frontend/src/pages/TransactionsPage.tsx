@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import {
   Plus, Trash2, Pencil, ArrowLeftRight, Search,
   CreditCard as CreditCardIcon, RefreshCw, ChevronLeft, ChevronRight,
+  Tag, TrendingUp, TrendingDown, Minus,
 } from "lucide-react";
 import { z } from "zod";
 
@@ -14,7 +15,6 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import { Badge } from "@/components/ui/Badge";
 import {
   TRANSACTIONS_QUERY,
   CREATE_TRANSACTION_MUTATION,
@@ -25,7 +25,7 @@ import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CATEGORIES_QUERY } from "@/graphql/queries/categories";
 import { CREDIT_CARDS_QUERY } from "@/graphql/queries/creditCards";
 import {
-  formatCurrency, formatDate, formatMonthYear, roundMoney,
+  cn, formatCurrency, formatDate, formatMonthYear, roundMoney,
   TRANSACTION_TYPE_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, Category, CreditCard, Transaction } from "@/types";
@@ -51,12 +51,6 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-const TRANSACTION_TYPE_OPTIONS = [
-  { value: "expense", label: "Despesa" },
-  { value: "income", label: "Receita" },
-  { value: "transfer", label: "Transferência" },
-];
-
 const PAYMENT_METHOD_OPTIONS = [
   { value: "debit", label: "Débito" },
   { value: "pix", label: "PIX" },
@@ -66,6 +60,11 @@ const PAYMENT_METHOD_OPTIONS = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+function formatDayHeader(dateStr: string) {
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+}
 
 function currentYearMonth() {
   const now = new Date();
@@ -159,12 +158,21 @@ export function TransactionsPage() {
     }
   }, [isTransfer, paymentMethod, setValue]);
 
-  // Quando muda para crédito, força transactionType = "expense"
+  // Crédito não suporta transferência
   useEffect(() => {
-    if (isCreditPayment && transactionType !== "expense") {
+    if (isCreditPayment && transactionType === "transfer") {
       setValue("transactionType", "expense");
     }
   }, [isCreditPayment, transactionType, setValue]);
+
+  function setType(type: "expense" | "income" | "transfer") {
+    setValue("transactionType", type);
+    if (type === "transfer") {
+      setValue("paymentMethod", "transfer");
+    } else if (paymentMethod === "transfer") {
+      setValue("paymentMethod", "pix");
+    }
+  }
 
   const [createTransaction, { loading: creating }] = useMutation(CREATE_TRANSACTION_MUTATION, {
     refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
@@ -258,7 +266,8 @@ export function TransactionsPage() {
       if (data.paymentMethod === "credit") {
         createInput.creditCardId = data.creditCardId || null;
         createInput.accountId = null;
-        createInput.totalInstallments = data.totalInstallments ?? 1;
+        // Estorno (income) nunca tem parcelas
+        createInput.totalInstallments = data.transactionType === "income" ? 1 : (data.totalInstallments ?? 1);
       } else if (data.transactionType === "transfer") {
         createInput.accountId = data.accountId || null;
         createInput.transferAccountId = data.transferAccountId || null;
@@ -311,28 +320,51 @@ export function TransactionsPage() {
       </div>
 
       {/* Navegação de mês + resumo */}
-      <Card padding="sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <button onClick={prevMonth} className="rounded-lg p-1.5 text-gray-400 hover:bg-surface-hover hover:text-white transition-colors">
-              <ChevronLeft size={16} />
-            </button>
-            <span className="min-w-[160px] text-center text-sm font-medium text-white capitalize">
-              {formatMonthLabel(navMonth.year, navMonth.month)}
-            </span>
-            <button onClick={nextMonth} className="rounded-lg p-1.5 text-gray-400 hover:bg-surface-hover hover:text-white transition-colors">
-              <ChevronRight size={16} />
-            </button>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <button onClick={prevMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors">
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold capitalize text-white">
+            {formatMonthLabel(navMonth.year, navMonth.month)}
+          </span>
+          <button onClick={nextMonth} className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/15">
+              <TrendingUp size={13} className="text-emerald-400" />
+            </div>
+            <p className="text-[11px] text-gray-500">Receitas</p>
+            <p className="text-sm font-bold tabular-nums text-emerald-400">{formatCurrency(totalIncome)}</p>
           </div>
-          <div className="flex gap-4 text-xs">
-            <span className="text-emerald-400">↑ {formatCurrency(totalIncome)}</span>
-            <span className="text-red-400">↓ {formatCurrency(totalExpense)}</span>
-            <span className={roundMoney(totalIncome - totalExpense) >= 0 ? "text-emerald-400 font-semibold" : "text-red-400 font-semibold"}>
-              = {formatCurrency(roundMoney(totalIncome - totalExpense))}
-            </span>
+          <div className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-red-500/15">
+              <TrendingDown size={13} className="text-red-400" />
+            </div>
+            <p className="text-[11px] text-gray-500">Despesas</p>
+            <p className="text-sm font-bold tabular-nums text-red-400">{formatCurrency(totalExpense)}</p>
+          </div>
+          <div className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
+            <div className={cn(
+              "flex h-6 w-6 items-center justify-center rounded-lg",
+              roundMoney(totalIncome - totalExpense) >= 0 ? "bg-sky-500/15" : "bg-red-500/15"
+            )}>
+              <Minus size={13} className={roundMoney(totalIncome - totalExpense) >= 0 ? "text-sky-400" : "text-red-400"} />
+            </div>
+            <p className="text-[11px] text-gray-500">Saldo</p>
+            <p className={cn(
+              "text-sm font-bold tabular-nums",
+              roundMoney(totalIncome - totalExpense) >= 0 ? "text-sky-400" : "text-red-400"
+            )}>
+              {formatCurrency(roundMoney(totalIncome - totalExpense))}
+            </p>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Filtros */}
       <Card padding="sm">
@@ -392,38 +424,54 @@ export function TransactionsPage() {
             return (
               <div key={dateKey}>
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{formatDate(dateKey)}</p>
-                  <span className={`text-xs font-semibold ${dayTotal >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  <p className="text-xs font-semibold capitalize text-gray-500">
+                    {formatDayHeader(dateKey)}
+                  </p>
+                  <span className={`text-xs font-semibold tabular-nums ${dayTotal >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                     {dayTotal >= 0 ? "+" : ""}{formatCurrency(dayTotal)}
                   </span>
                 </div>
-                <div className="space-y-1">
+                <div className="rounded-xl border border-surface-border overflow-hidden divide-y divide-surface-border/60">
                   {grouped[dateKey].map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-start gap-3 rounded-xl border border-surface-border bg-surface-card px-3 py-3 sm:px-4 hover:border-sky-500/30 transition-colors group"
+                      className="flex items-center gap-3 bg-surface-card px-3 py-3.5 sm:px-4 hover:bg-surface-hover/30 transition-colors group"
                     >
-                      {/* Ícone */}
+                      {/* Ícone — categoria tem prioridade */}
                       <div
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg mt-0.5"
-                        style={{ backgroundColor: (t.category?.color ?? "#0ea5e9") + "22", color: t.category?.color ?? "#0ea5e9" }}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                        style={
+                          t.category
+                            ? { background: `${t.category.color}20` }
+                            : { background: "rgba(255,255,255,0.05)" }
+                        }
                       >
-                        {t.creditCard ? <CreditCardIcon size={14} /> : t.recurrence ? <RefreshCw size={14} /> : <ArrowLeftRight size={14} />}
+                        {t.category?.icon ? (
+                          <span className="text-base leading-none">{t.category.icon}</span>
+                        ) : t.category ? (
+                          <Tag size={14} style={{ color: t.category.color }} />
+                        ) : t.creditCard ? (
+                          <CreditCardIcon size={14} className="text-sky-400" />
+                        ) : t.recurrence ? (
+                          <RefreshCw size={14} className="text-purple-400" />
+                        ) : (
+                          <ArrowLeftRight size={14} className="text-gray-400" />
+                        )}
                       </div>
 
                       {/* Conteúdo */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <p className="text-sm font-medium text-white leading-tight">{t.description}</p>
+                              <p className="text-sm font-medium text-white leading-tight truncate">{t.description}</p>
                               {t.totalInstallments && t.totalInstallments > 1 && (
                                 <span className="rounded bg-surface px-1.5 py-0.5 text-xs text-gray-400 shrink-0">
                                   {t.installmentNumber}/{t.totalInstallments}x
                                 </span>
                               )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                               {t.account && <span className="text-xs text-gray-500">{t.account.name}</span>}
                               {t.transferAccount && (
                                 <span className="text-xs text-gray-500">→ {t.transferAccount.name}</span>
@@ -433,50 +481,42 @@ export function TransactionsPage() {
                                   <CreditCardIcon size={10} />{t.creditCard.name}
                                 </span>
                               )}
-                              {t.invoice && (
-                                <span className="text-xs text-gray-500">Fatura {formatMonthYear(t.invoice.referenceMonth)}</span>
-                              )}
                               {t.isReceivable && t.debtorName && (
                                 <span className="text-xs text-amber-400">↩ {t.debtorName}</span>
                               )}
                               {t.category && (
                                 <span
-                                  className="rounded-full px-2 py-0.5 text-xs font-medium"
-                                  style={{ backgroundColor: t.category.color + "22", color: t.category.color }}
+                                  className="text-xs font-medium"
+                                  style={{ color: t.category.color }}
                                 >
                                   {t.category.name}
                                 </span>
                               )}
-                              <span className="text-xs text-gray-600">{PAYMENT_METHOD_LABELS[t.paymentMethod]}</span>
                             </div>
                           </div>
 
-                          <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            <p className={`text-sm font-semibold whitespace-nowrap ${
+                          <div className="flex items-center gap-1 shrink-0">
+                            <p className={cn(
+                              "text-sm font-bold tabular-nums whitespace-nowrap mr-1",
                               t.transactionType === "income" ? "text-emerald-400"
                               : t.transactionType === "expense" ? "text-red-400"
                               : "text-blue-400"
-                            }`}>
+                            )}>
                               {t.transactionType === "income" ? "+" : t.transactionType === "expense" ? "−" : ""}
                               {formatCurrency(t.amount)}
                             </p>
-                            <div className="flex items-center gap-1">
-                              <Badge variant={t.transactionType === "income" ? "income" : t.transactionType === "expense" ? "expense" : "transfer"}>
-                                {TRANSACTION_TYPE_LABELS[t.transactionType]}
-                              </Badge>
-                              <button
-                                onClick={() => openEdit(t)}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-                              >
-                                <Pencil size={13} />
-                              </button>
-                              <button
-                                onClick={() => setDeleteId(t.id)}
-                                className="rounded-lg p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => openEdit(t)}
+                              className="rounded-lg p-1.5 text-gray-600 hover:bg-surface-hover hover:text-white transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteId(t.id)}
+                              className="rounded-lg p-1.5 text-gray-600 hover:bg-red-500/10 hover:text-red-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -496,9 +536,37 @@ export function TransactionsPage() {
           {/* Aviso para parcelados */}
           {editing && editing.totalInstallments && editing.totalInstallments > 1 && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-              Este lançamento é parcelado ({editing.installmentNumber}/{editing.totalInstallments}x). Apenas este registro será alterado.
+              Parcelado ({editing.installmentNumber}/{editing.totalInstallments}x). Valor e data são exclusivos desta parcela — descrição, categoria, notas e status de recebimento serão aplicados a todas.
             </div>
           )}
+
+          {/* Tipo — toggle segmentado */}
+          <div className="flex overflow-hidden rounded-xl border border-surface-border">
+            {([
+              { value: "expense",  label: "Despesa",       cls: "text-red-400 bg-red-500/15 border-red-500/40" },
+              { value: "income",   label: "Receita",        cls: "text-emerald-400 bg-emerald-500/15 border-emerald-500/40" },
+              { value: "transfer", label: "Transferência",  cls: "text-blue-400 bg-blue-500/15 border-blue-500/40" },
+            ] as const).map(({ value, label, cls }, i) => {
+              const isActive = transactionType === value;
+              const disabled = value === "transfer" && isCreditPayment;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => setType(value)}
+                  className={[
+                    "flex-1 py-2.5 text-sm font-medium transition-all focus:outline-none",
+                    i > 0 ? "border-l border-surface-border" : "",
+                    disabled ? "opacity-30 cursor-not-allowed" : "cursor-pointer",
+                    isActive ? cls : "text-gray-500 hover:text-gray-300 hover:bg-surface-hover",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* Campos principais */}
           <Input
@@ -517,29 +585,22 @@ export function TransactionsPage() {
             <Input label="Data" type="date" error={errors.date?.message} {...register("date")} />
           </div>
 
-          {/* Tipo + método */}
-          <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
-            <Select
-              label="Tipo"
-              options={TRANSACTION_TYPE_OPTIONS}
-              error={errors.transactionType?.message}
-              {...register("transactionType")}
-              disabled={isCreditPayment}
-            />
-            <Select
-              label="Pagamento"
-              options={PAYMENT_METHOD_OPTIONS}
-              error={errors.paymentMethod?.message}
-              {...register("paymentMethod")}
-              disabled={isTransfer}
-            />
-          </div>
+          {/* Método de pagamento */}
+          <Select
+            label="Pagamento"
+            options={isTransfer
+              ? PAYMENT_METHOD_OPTIONS
+              : PAYMENT_METHOD_OPTIONS.filter(o => o.value !== "transfer")}
+            error={errors.paymentMethod?.message}
+            {...register("paymentMethod")}
+            disabled={isTransfer}
+          />
 
           {/* Campos condicionais */}
           {isCreditPayment ? (
             <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
               <Select label="Cartão" options={cardOptions} placeholder="Selecione" error={errors.creditCardId?.message} {...register("creditCardId")} />
-              {!editing && (
+              {!editing && transactionType === "expense" && (
                 <Input label="Parcelas" type="number" min={1} max={48} error={errors.totalInstallments?.message} {...register("totalInstallments")} />
               )}
             </div>
