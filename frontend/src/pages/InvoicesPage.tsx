@@ -563,13 +563,7 @@ export function InvoicesPage() {
                           { label: "Total meu", value: totalMeu, color: "text-sky-400", icon: null, dot: "bg-sky-400" },
                         ].map((stat) => (
                           <div key={stat.label} className="flex flex-col gap-1 rounded-xl border border-surface-border bg-surface-card p-3">
-                            <div className="flex items-center gap-1.5">
-                              {stat.icon
-                                ? <stat.icon size={12} className={stat.iconColor} />
-                                : <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", stat.dot)} />
-                              }
-                              <p className="text-[11px] text-gray-500 leading-tight">{stat.label}</p>
-                            </div>
+                            <p className="text-[11px] text-gray-500 leading-tight">{stat.label}</p>
                             <p className={cn("text-sm font-bold tabular-nums", stat.color)}>
                               {formatCurrency(stat.value)}
                             </p>
