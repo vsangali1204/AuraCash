@@ -326,6 +326,57 @@ class ReceivableMutation:
             return count
 
     @strawberry.mutation
+    def migrate_partial_receivables(self, info: strawberry.types.Info) -> int:
+        """Corrige todos os recebíveis com status 'partial': quita o original e cria novo
+        recebível com o saldo restante para daqui a 30 dias (a partir de hoje)."""
+        from django.utils import timezone
+
+        user = require_auth(info)
+        today = timezone.localdate()
+        defer_date = today + timedelta(days=30)
+
+        partials = TransactionModel.objects.filter(
+            user=user,
+            is_receivable=True,
+            receipt_status="partial",
+        )
+
+        count = 0
+        for tx in partials:
+            leftover = tx.amount - tx.received_amount
+            if leftover <= Decimal("0"):
+                # Não tem mais saldo — apenas fecha
+                tx.received_amount = tx.amount
+                tx.receipt_status = "received"
+                tx.save()
+                count += 1
+                continue
+
+            TransactionModel.objects.create(
+                user=user,
+                description=tx.description,
+                amount=leftover,
+                transaction_type=tx.transaction_type,
+                payment_method=tx.payment_method,
+                date=defer_date,
+                competence_date=defer_date,
+                account=tx.account,
+                category=tx.category,
+                is_receivable=True,
+                debtor_name=tx.debtor_name,
+                receipt_status="pending",
+                received_amount=Decimal("0"),
+                notes=tx.notes,
+            )
+
+            tx.received_amount = tx.amount
+            tx.receipt_status = "received"
+            tx.save()
+            count += 1
+
+        return count
+
+    @strawberry.mutation
     def delete_receipt(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
         user = require_auth(info)
         receipt = Receipt.objects.filter(id=id, transaction__user=user).select_related("transaction").first()
