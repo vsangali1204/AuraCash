@@ -21,33 +21,45 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
           key={to}
           to={to}
           end={end}
-          className={({ isActive }) =>
-            cn(
-              "flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
-              isActive ? "text-sky-400" : "text-gray-500 hover:text-gray-300"
-            )
-          }
+          className="flex flex-1 flex-col items-center justify-center gap-0.5"
         >
           {({ isActive }) => (
             <>
-              <span className={cn("flex h-6 w-6 items-center justify-center rounded-lg transition-colors", isActive && "bg-sky-600/15")}>
-                <Icon size={18} />
+              <span
+                className={cn(
+                  "flex h-8 w-10 items-center justify-center rounded-2xl transition-all duration-150",
+                  isActive ? "bg-sky-500/15" : ""
+                )}
+              >
+                <Icon
+                  size={19}
+                  className={cn(
+                    "transition-colors",
+                    isActive ? "text-sky-400" : "text-gray-500"
+                  )}
+                />
               </span>
-              {label}
+              <span
+                className={cn(
+                  "text-[10px] font-medium transition-colors",
+                  isActive ? "text-sky-400" : "text-gray-600"
+                )}
+              >
+                {label}
+              </span>
             </>
           )}
         </NavLink>
       ))}
 
-      {/* Mais — abre o sidebar mobile */}
       <button
         onClick={onMoreClick}
-        className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-gray-500 hover:text-gray-300 transition-colors"
+        className="flex flex-1 flex-col items-center justify-center gap-0.5"
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-lg">
-          <MoreHorizontal size={18} />
+        <span className="flex h-8 w-10 items-center justify-center rounded-2xl">
+          <MoreHorizontal size={19} className="text-gray-500" />
         </span>
-        Mais
+        <span className="text-[10px] font-medium text-gray-600">Mais</span>
       </button>
     </nav>
   );

@@ -1,6 +1,28 @@
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
-import { LogOut, Menu, User } from "lucide-react";
+import { LogOut, Menu, ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
+
+const pageTitles: Record<string, string> = {
+  "/": "Dashboard",
+  "/accounts": "Contas",
+  "/transactions": "Lançamentos",
+  "/categories": "Categorias",
+  "/credit-cards": "Cartões de Crédito",
+  "/invoices": "Faturas",
+  "/recurrences": "Recorrências",
+  "/receivables": "A Receber",
+  "/calendar": "Calendário",
+  "/reports": "Relatórios",
+};
+
+function getInitials(name?: string) {
+  if (!name) return "?";
+  const parts = name.trim().split(" ");
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 interface NavbarProps {
   onMobileMenuToggle: () => void;
@@ -10,6 +32,11 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
   const { user, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+
+  const pageTitle = pageTitles[location.pathname] ?? "AuraCash";
+  const initials = getInitials(user?.name);
+  const firstName = user?.name?.split(" ")[0] ?? "";
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -22,44 +49,58 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
   }, []);
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-surface-border bg-surface-card px-4 md:px-6">
-      {/* Hamburger — mobile only */}
-      <button
-        onClick={onMobileMenuToggle}
-        className="rounded-lg p-2 text-gray-400 hover:bg-surface-hover hover:text-white transition-colors md:hidden"
-        aria-label="Abrir menu"
-      >
-        <Menu size={20} />
-      </button>
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-surface-border bg-surface-card px-4 md:px-6">
+      {/* Left */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onMobileMenuToggle}
+          className="rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.05] hover:text-gray-300 transition-colors md:hidden"
+          aria-label="Abrir menu"
+        >
+          <Menu size={20} />
+        </button>
+        <h1 className="hidden text-sm font-semibold text-white sm:block">{pageTitle}</h1>
+      </div>
 
-      {/* Spacer — desktop */}
-      <div className="hidden md:block" />
-
-      {/* User menu */}
+      {/* Right — user menu */}
       <div className="relative" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+          className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
         >
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-600/20 text-sky-400">
-            <User size={14} />
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-[11px] font-bold text-white shadow-md shadow-sky-900/30">
+            {initials}
           </div>
-          <span className="hidden sm:block max-w-[120px] truncate">{user?.name}</span>
+          <span className="hidden max-w-[100px] truncate text-sm font-medium text-gray-300 sm:block">
+            {firstName}
+          </span>
+          <ChevronDown
+            size={13}
+            className={cn(
+              "hidden text-gray-500 transition-transform duration-200 sm:block",
+              menuOpen && "rotate-180"
+            )}
+          />
         </button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-surface-border bg-surface-card p-1 shadow-xl z-50">
-            <div className="px-3 py-2">
-              <p className="text-xs font-medium text-white truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+          <div className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-surface-border bg-[#1e1e1e] p-1 shadow-2xl shadow-black/40">
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-xs font-bold text-white">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-white">{user?.name}</p>
+                <p className="truncate text-[11px] text-gray-500">{user?.email}</p>
+              </div>
             </div>
             <div className="my-1 border-t border-surface-border" />
             <button
               onClick={logout}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition-colors hover:bg-red-500/10"
             >
               <LogOut size={14} />
-              Sair
+              Sair da conta
             </button>
           </div>
         )}

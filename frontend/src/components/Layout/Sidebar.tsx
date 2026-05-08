@@ -23,17 +23,32 @@ interface SidebarProps {
   onMobileClose: () => void;
 }
 
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
-  { to: "/accounts", icon: Wallet, label: "Contas" },
-  { to: "/transactions", icon: ArrowLeftRight, label: "Lançamentos" },
-  { to: "/categories", icon: Tag, label: "Categorias" },
-  { to: "/credit-cards", icon: CreditCard, label: "Cartões de Crédito" },
-  { to: "/invoices", icon: FileText, label: "Faturas" },
-  { to: "/recurrences", icon: RefreshCw, label: "Recorrências" },
-  { to: "/receivables", icon: Users, label: "A Receber" },
-  { to: "/calendar", icon: Calendar, label: "Calendário" },
-  { to: "/reports", icon: BarChart2, label: "Relatórios" },
+const navGroups = [
+  {
+    label: "Principal",
+    items: [
+      { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
+      { to: "/accounts", icon: Wallet, label: "Contas" },
+      { to: "/transactions", icon: ArrowLeftRight, label: "Lançamentos" },
+    ],
+  },
+  {
+    label: "Crédito",
+    items: [
+      { to: "/credit-cards", icon: CreditCard, label: "Cartões" },
+      { to: "/invoices", icon: FileText, label: "Faturas" },
+    ],
+  },
+  {
+    label: "Gestão",
+    items: [
+      { to: "/categories", icon: Tag, label: "Categorias" },
+      { to: "/recurrences", icon: RefreshCw, label: "Recorrências" },
+      { to: "/receivables", icon: Users, label: "A Receber" },
+      { to: "/calendar", icon: Calendar, label: "Calendário" },
+      { to: "/reports", icon: BarChart2, label: "Relatórios" },
+    ],
+  },
 ];
 
 function SidebarContent({
@@ -52,48 +67,74 @@ function SidebarContent({
       {/* Logo */}
       <div
         className={cn(
-          "flex h-16 items-center border-b border-surface-border px-4 shrink-0",
-          collapsed ? "justify-center" : "gap-3"
+          "flex h-14 shrink-0 items-center border-b border-surface-border px-4",
+          collapsed ? "justify-center" : "gap-2.5"
         )}
       >
-        <img src="/logo.png" alt="AuraCash" className="h-8 w-8 shrink-0 object-contain" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 shadow-lg shadow-sky-900/30">
+          <img src="/logo.png" alt="AuraCash" className="h-5 w-5 object-contain" />
+        </div>
         {!collapsed && (
-          <span className="text-base font-semibold text-white">AuraCash</span>
+          <span className="text-[15px] font-semibold tracking-tight text-white">
+            AuraCash
+          </span>
         )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 pt-4">
-        {navItems.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            title={collapsed ? label : undefined}
-            onClick={onItemClick}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sky-600/15 text-sky-400"
-                  : "text-gray-400 hover:bg-surface-hover hover:text-white"
-              )
-            }
-          >
-            <Icon size={18} className="shrink-0" />
-            {!collapsed && <span className="truncate">{label}</span>}
-          </NavLink>
+      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-3">
+        {navGroups.map((group, gi) => (
+          <div key={gi}>
+            {!collapsed && (
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-600">
+                {group.label}
+              </p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map(({ to, icon: Icon, label, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  title={collapsed ? label : undefined}
+                  onClick={onItemClick}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                      collapsed ? "justify-center" : "gap-3",
+                      isActive
+                        ? "bg-white/[0.07] text-white"
+                        : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon
+                        size={17}
+                        className={cn(
+                          "shrink-0 transition-colors",
+                          isActive ? "text-sky-400" : ""
+                        )}
+                      />
+                      {!collapsed && <span className="truncate">{label}</span>}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
       {/* Toggle (desktop only) */}
       {showToggle && (
-        <div className="border-t border-surface-border p-2 shrink-0">
+        <div className="shrink-0 border-t border-surface-border p-2">
           <button
             onClick={onToggle}
-            className="flex w-full items-center justify-center rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
+            className="flex w-full items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-white/[0.04] hover:text-gray-400 transition-colors"
           >
-            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+            {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
           </button>
         </div>
       )}
@@ -104,7 +145,7 @@ function SidebarContent({
 export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   return (
     <>
-      {/* Desktop sidebar — always visible on md+ */}
+      {/* Desktop sidebar */}
       <aside
         className={cn(
           "hidden md:flex h-full flex-col border-r border-surface-border bg-surface-card transition-all duration-300",
@@ -117,19 +158,16 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
       {/* Mobile drawer overlay */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={onMobileClose}
           />
-          {/* Drawer */}
           <aside className="relative flex h-full w-64 flex-col border-r border-surface-border bg-surface-card">
-            {/* Close button */}
             <button
               onClick={onMobileClose}
-              className="absolute right-3 top-4 rounded-lg p-1.5 text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+              className="absolute right-3 top-3.5 rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.05] hover:text-gray-300 transition-colors"
             >
-              <X size={18} />
+              <X size={17} />
             </button>
             <SidebarContent
               collapsed={false}
