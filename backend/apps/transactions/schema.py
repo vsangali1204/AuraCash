@@ -9,6 +9,7 @@ Date = date
 import strawberry
 from django.db.models import Case, Count, DecimalField, F, Sum, Value, When
 from django.db.models.functions import Coalesce, ExtractMonth, ExtractYear
+from django.utils import timezone
 
 from shared.auth import require_auth
 from apps.accounts.schema import AccountType, map_account
@@ -398,7 +399,7 @@ class TransactionQuery:
         # ── Projeção de caixa: receitas/despesas futuras e faturas pendentes ──
         from apps.credit_cards.models import Invoice as InvoiceModel
         from apps.recurrences.models import Recurrence
-        today = date.today()
+        today = timezone.localdate()
 
         # Receitas ainda a entrar este mês: transações já lançadas com date > hoje
         future_income_tx = float(Transaction.objects.filter(
@@ -631,7 +632,7 @@ class TransactionQuery:
     @strawberry.field
     def installments_by_month(self, info: strawberry.types.Info) -> list["InstallmentMonthSummary"]:
         user = require_auth(info)
-        today = date.today()
+        today = timezone.localdate()
 
         rows = (
             Transaction.objects.filter(

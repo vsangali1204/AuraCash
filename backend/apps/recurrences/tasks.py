@@ -4,10 +4,10 @@ Executada às 07:00 pelo Celery Beat.
 """
 from __future__ import annotations
 
-from datetime import date
 from decimal import Decimal
 
 from celery import shared_task
+from django.utils import timezone
 
 
 @shared_task(name="apps.recurrences.tasks.process_recurrences")
@@ -15,7 +15,7 @@ def process_recurrences():
     from apps.recurrences.models import Recurrence
     from apps.transactions.models import Transaction
 
-    today = date.today()
+    today = timezone.localdate()
     created = 0
 
     recurrences = Recurrence.objects.filter(

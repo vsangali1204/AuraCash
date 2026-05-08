@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 import strawberry
+from django.utils import timezone
 
 from shared.auth import require_auth
 from .models import CreditCard, Invoice, get_first_invoice_month, get_or_create_invoice, add_months
@@ -79,7 +80,7 @@ def map_invoice(inv: Invoice) -> InvoiceType:
 
 
 def map_credit_card(card: CreditCard) -> CreditCardType:
-    today = date.today()
+    today = timezone.localdate()
     # Fatura corrente: mês em que novas compras entrarão hoje
     current_ref = get_first_invoice_month(card, today)
     current_inv = Invoice.objects.filter(credit_card=card, reference_month=current_ref).first()
@@ -237,6 +238,25 @@ class CreditCardMutation:
         return map_credit_card(card)
 
     @strawberry.mutation
+    def recalculate_invoice_status(self, info: strawberry.types.Info, invoice_id: strawberry.ID) -> InvoiceType:
+        """Recalcula o status da fatura com base no paid_amount vs total_amount.
+        Útil para corrigir faturas que ficaram com status incorreto após pagamentos."""
+        user = require_auth(info)
+        inv = Invoice.objects.filter(id=invoice_id, credit_card__user=user).first()
+        if not inv:
+            raise Exception("Fatura não encontrada.")
+
+        total = inv.total_amount
+        if inv.paid_amount >= total - Decimal("0.01"):
+            inv.status = Invoice.Status.PAID
+        elif inv.paid_amount > Decimal("0"):
+            inv.status = Invoice.Status.PARTIAL
+        else:
+            inv.status = Invoice.Status.OPEN
+        inv.save()
+        return map_invoice(inv)
+
+    @strawberry.mutation
     def delete_credit_card(self, info: strawberry.types.Info, id: strawberry.ID) -> bool:
         user = require_auth(info)
         deleted, _ = CreditCard.objects.filter(id=id, user=user).delete()
@@ -261,6 +281,7 @@ class CreditCardMutation:
 
         payment = Decimal(str(input.amount))
         total = inv.total_amount
+        remaining = max(total - inv.paid_amount, Decimal("0"))
 
         # Registra pagamento como despesa na conta
         Transaction.objects.create(
@@ -274,9 +295,10 @@ class CreditCardMutation:
             notes=f"Fatura ID {inv.id}",
         )
 
-        # Atualiza fatura
         inv.paid_amount += payment
-        if inv.paid_amount >= total:
+        # Considera quitada se paid_amount cobre o total (tolerância de 1 centavo para arredondamentos)
+        # ou se o pagamento cobre o saldo restante (protege contra paid_amount inconsistente no banco)
+        if inv.paid_amount >= total - Decimal("0.01") or payment >= remaining - Decimal("0.01"):
             inv.status = Invoice.Status.PAID
         else:
             inv.status = Invoice.Status.PARTIAL

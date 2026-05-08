@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Optional
 
 import strawberry
+from django.utils import timezone
 
 from shared.auth import require_auth
 from .models import Recurrence
@@ -31,7 +32,7 @@ class RecurrenceType:
 
 
 def map_recurrence(rec: Recurrence) -> RecurrenceType:
-    today = date.today()
+    today = timezone.localdate()
     next_exec = rec.get_execution_date(today.year, today.month)
     if next_exec and next_exec < today:
         nm = today.month + 1 if today.month < 12 else 1
@@ -226,7 +227,7 @@ class RecurrenceMutation:
         from apps.transactions.models import Transaction
 
         user = require_auth(info)
-        today = date.today()
+        today = timezone.localdate()
         created = 0
 
         recurrences = Recurrence.objects.filter(
@@ -289,7 +290,7 @@ class RecurrenceMutation:
         if not rec:
             raise Exception("Recorrência não encontrada.")
 
-        today = date.today()
+        today = timezone.localdate()
 
         Transaction.objects.filter(
             recurrence=rec,

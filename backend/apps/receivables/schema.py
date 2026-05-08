@@ -1,9 +1,10 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 import strawberry
 from django.db.models import Sum
+from django.utils import timezone
 
 from shared.auth import require_auth
 from .models import Receipt
@@ -54,7 +55,6 @@ class CreateReceiptInput:
     receipt_date: date
     destination_account_id: strawberry.ID
     notes: Optional[str] = None
-    defer_remaining_to_date: Optional[date] = None
 
 
 @strawberry.input
@@ -107,7 +107,7 @@ class ReceivableQuery:
         period: Optional[str] = None,  # overdue | this_month | next_month | all
     ) -> list[TransactionType]:
         user = require_auth(info)
-        today = date.today()
+        today = timezone.localdate()
 
         qs = TransactionModel.objects.filter(
             user=user,
@@ -194,16 +194,17 @@ class ReceivableMutation:
 
         leftover = remaining - amount  # positivo = ainda falta; negativo = pagamento a mais
 
-        if leftover > Decimal("0") and input.defer_remaining_to_date:
-            # Pagamento parcial + adiamento: cria novo recebível pelo restante
+        if leftover > Decimal("0"):
+            # Pagamento parcial: quita o original e cria novo recebível para daqui a 30 dias
+            defer_date = input.receipt_date + timedelta(days=30)
             TransactionModel.objects.create(
                 user=user,
                 description=tx.description,
                 amount=leftover,
                 transaction_type=tx.transaction_type,
                 payment_method=tx.payment_method,
-                date=input.defer_remaining_to_date,
-                competence_date=input.defer_remaining_to_date,
+                date=defer_date,
+                competence_date=defer_date,
                 account=tx.account,
                 category=tx.category,
                 is_receivable=True,
@@ -212,17 +213,10 @@ class ReceivableMutation:
                 received_amount=Decimal("0"),
                 notes=tx.notes,
             )
-            tx.received_amount = tx.amount
-            tx.receipt_status = "received"
-        elif leftover <= Decimal("0"):
-            # Pagamento integral ou a mais: encerra o lançamento
-            tx.received_amount = tx.amount
-            tx.receipt_status = "received"
-        else:
-            # Pagamento parcial sem adiamento
-            tx.received_amount += amount
-            tx.receipt_status = "partial"
 
+        # Sempre quita o lançamento original (seja pagamento parcial ou integral)
+        tx.received_amount = tx.amount
+        tx.receipt_status = "received"
         tx.save()
         return map_receipt(receipt)
 

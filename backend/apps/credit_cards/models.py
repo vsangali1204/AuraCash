@@ -46,13 +46,22 @@ class CreditCard(models.Model):
     def available_limit(self) -> Decimal:
         """Limite disponível = limite_total - soma das parcelas em faturas não pagas."""
         from apps.transactions.models import Transaction
+        from django.db.models import Case, When, F, DecimalField
 
         used = (
             Transaction.objects.filter(
                 credit_card=self,
                 invoice__isnull=False,
                 invoice__status__in=["open", "closed"],
-            ).aggregate(total=models.Sum("amount"))["total"]
+            ).aggregate(
+                total=models.Sum(
+                    Case(
+                        When(transaction_type="income", then=-F("amount")),
+                        default=F("amount"),
+                        output_field=DecimalField(max_digits=12, decimal_places=2),
+                    )
+                )
+            )["total"]
             or Decimal("0")
         )
         return self.total_limit - used
@@ -88,10 +97,17 @@ class Invoice(models.Model):
     @property
     def total_amount(self) -> Decimal:
         from apps.transactions.models import Transaction
+        from django.db.models import Case, When, F, DecimalField
 
         return (
             Transaction.objects.filter(invoice=self).aggregate(
-                total=models.Sum("amount")
+                total=models.Sum(
+                    Case(
+                        When(transaction_type="income", then=-F("amount")),
+                        default=F("amount"),
+                        output_field=DecimalField(max_digits=12, decimal_places=2),
+                    )
+                )
             )["total"]
             or Decimal("0")
         )
