@@ -7,8 +7,13 @@ import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
   Clock, Calendar, ChevronDown, ChevronUp, List,
-  UserCheck, Search, X, TrendingDown, TrendingUp,
+  UserCheck, Search, X, TrendingDown, TrendingUp, FileDown,
 } from "lucide-react";
+import {
+  downloadReceivablesPDF,
+  type DebtorGroup,
+  type CategoryTotal,
+} from "@/components/reports/ReceivablesPDFReport";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
@@ -281,6 +286,9 @@ export function ReceivablesPage() {
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkPersonLabel, setBulkPersonLabel] = useState<string | null>(null);
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfSelectedDebtors, setPdfSelectedDebtors] = useState<Set<string>>(new Set());
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const { data: txData, loading } = useQuery<{ receivableTransactions: Transaction[] }>(
     RECEIVABLE_TRANSACTIONS_QUERY,
@@ -360,6 +368,22 @@ export function ReceivablesPage() {
       )
     );
   }, [filteredTransactions]);
+
+  const allDebtorsForPdf = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+    for (const tx of allTxs) {
+      const key = tx.debtorName ?? NO_DEBTOR_KEY;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(tx);
+    }
+    return new Map(
+      [...map.entries()].sort(
+        ([, a], [, b]) =>
+          b.reduce((s, t) => s + t.remainingAmount, 0) -
+          a.reduce((s, t) => s + t.remainingAmount, 0)
+      )
+    );
+  }, [allTxs]);
 
   const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
@@ -619,6 +643,48 @@ export function ReceivablesPage() {
     );
   }
 
+  function openPdfModal() {
+    setPdfSelectedDebtors(new Set(allDebtorsForPdf.keys()));
+    setPdfModalOpen(true);
+  }
+
+  async function handleGeneratePDF() {
+    if (pdfSelectedDebtors.size === 0) return;
+    setPdfGenerating(true);
+    try {
+      const debtors: DebtorGroup[] = [...pdfSelectedDebtors].map((key) => ({
+        name: key === NO_DEBTOR_KEY ? "Sem devedor" : key,
+        transactions: allDebtorsForPdf.get(key) ?? [],
+      }));
+
+      const allTxsSelected = debtors.flatMap((d) => d.transactions);
+      const totalGrand = allTxsSelected.reduce((s, t) => s + t.remainingAmount, 0);
+
+      const catMap = new Map<string, CategoryTotal>();
+      for (const tx of allTxsSelected) {
+        const name = tx.category?.name ?? "Sem categoria";
+        const color = tx.category?.color ?? "#94a3b8";
+        const cur = catMap.get(name);
+        if (cur) cur.amount += tx.remainingAmount;
+        else catMap.set(name, { name, color, amount: tx.remainingAmount });
+      }
+      const categoryTotals = [...catMap.values()].sort((a, b) => b.amount - a.amount);
+
+      const now = new Date();
+      const generatedAt = now.toLocaleDateString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+
+      await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand });
+      setPdfModalOpen(false);
+    } catch {
+      toast.error("Erro ao gerar PDF. Tente novamente.");
+    } finally {
+      setPdfGenerating(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -630,6 +696,9 @@ export function ReceivablesPage() {
             <span className="font-semibold text-amber-400">{formatCurrency(totalPending)}</span>
           </p>
         </div>
+        <Button size="sm" variant="secondary" onClick={openPdfModal} className="shrink-0">
+          <FileDown size={14} /> Relatório PDF
+        </Button>
       </div>
 
       {/* Cards de resumo — 2×2 clicáveis */}
@@ -1043,6 +1112,97 @@ export function ReceivablesPage() {
           bulkLoading={bulkLoading}
           onCancel={() => { setBulkModalOpen(false); setBulkPersonLabel(null); }}
         />
+      </Modal>
+
+      {/* Modal — Gerar Relatório PDF */}
+      <Modal
+        open={pdfModalOpen}
+        onClose={() => setPdfModalOpen(false)}
+        title="Gerar Relatório PDF"
+        size="sm"
+      >
+        <div className="space-y-4">
+          {/* Selection header */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400">
+              <span className="font-semibold text-white">{pdfSelectedDebtors.size}</span> de{" "}
+              {allDebtorsForPdf.size} pessoa(s) selecionada(s)
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                onClick={() => setPdfSelectedDebtors(new Set(allDebtorsForPdf.keys()))}
+              >
+                Todas
+              </button>
+              <span className="text-gray-600">·</span>
+              <button
+                className="text-xs text-gray-500 hover:text-white transition-colors"
+                onClick={() => setPdfSelectedDebtors(new Set())}
+              >
+                Limpar
+              </button>
+            </div>
+          </div>
+
+          {/* Debtor list */}
+          <div className="max-h-64 overflow-y-auto space-y-1 rounded-xl border border-surface-border p-2">
+            {[...allDebtorsForPdf.entries()].map(([key, txs]) => {
+              const label = key === NO_DEBTOR_KEY ? "Sem devedor" : key;
+              const pending = txs.reduce((s, t) => s + t.remainingAmount, 0);
+              const isSelected = pdfSelectedDebtors.has(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() =>
+                    setPdfSelectedDebtors((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    })
+                  }
+                  className={cn(
+                    "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors",
+                    isSelected
+                      ? "bg-sky-500/10 border border-sky-500/30"
+                      : "border border-transparent hover:bg-surface-hover/30"
+                  )}
+                >
+                  {isSelected
+                    ? <CheckSquare size={16} className="text-sky-400 shrink-0" />
+                    : <Square size={16} className="text-gray-500 shrink-0" />}
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400 text-xs font-bold">
+                    {label.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{label}</p>
+                    <p className="text-xs text-gray-500">{txs.length} lançamento(s)</p>
+                  </div>
+                  <span className="text-xs font-semibold text-amber-400 shrink-0 tabular-nums">
+                    {formatCurrency(pending)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Generate button */}
+          <Button
+            className="w-full"
+            onClick={handleGeneratePDF}
+            disabled={pdfSelectedDebtors.size === 0 || pdfGenerating}
+          >
+            {pdfGenerating ? (
+              "Gerando PDF…"
+            ) : (
+              <>
+                <FileDown size={14} />
+                Baixar PDF ({pdfSelectedDebtors.size} pessoa{pdfSelectedDebtors.size !== 1 ? "s" : ""})
+              </>
+            )}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

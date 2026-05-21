@@ -4,6 +4,9 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    exclude: ["@react-pdf/renderer"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -36,6 +39,8 @@ export default defineConfig({
           "vendor-forms": ["react-hook-form", "zod", "@hookform/resolvers"],
           // Utilitários pequenos
           "vendor-utils": ["date-fns", "clsx", "tailwind-merge", "lucide-react"],
+          // PDF — carregado apenas na tela de recebíveis
+          "vendor-pdf": ["@react-pdf/renderer"],
         },
       },
     },
