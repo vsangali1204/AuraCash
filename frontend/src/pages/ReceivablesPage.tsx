@@ -371,7 +371,7 @@ export function ReceivablesPage() {
 
   const allDebtorsForPdf = useMemo(() => {
     const map = new Map<string, Transaction[]>();
-    for (const tx of allTxs) {
+    for (const tx of filteredTransactions) {
       const key = tx.debtorName ?? NO_DEBTOR_KEY;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(tx);
@@ -383,7 +383,7 @@ export function ReceivablesPage() {
           a.reduce((s, t) => s + t.remainingAmount, 0)
       )
     );
-  }, [allTxs]);
+  }, [filteredTransactions]);
 
   const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
@@ -675,8 +675,9 @@ export function ReceivablesPage() {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
       });
+      const periodLabel = PERIOD_TABS.find((t) => t.value === period)?.label ?? "Todos";
 
-      await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand });
+      await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand, periodLabel });
       setPdfModalOpen(false);
     } catch {
       toast.error("Erro ao gerar PDF. Tente novamente.");
@@ -1122,6 +1123,15 @@ export function ReceivablesPage() {
         size="sm"
       >
         <div className="space-y-4">
+          {/* Active period indicator */}
+          <div className="flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/8 px-3 py-2">
+            <Calendar size={13} className="text-sky-400 shrink-0" />
+            <p className="text-xs text-sky-300">
+              Período: <span className="font-semibold">{PERIOD_TABS.find((t) => t.value === period)?.label}</span>
+              {debtorFilter && <span className="text-sky-400/70"> · filtro "{debtorFilter}"</span>}
+            </p>
+          </div>
+
           {/* Selection header */}
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-400">

@@ -18,6 +18,7 @@ export interface ReportDocProps {
   categoryTotals: CategoryTotal[];
   generatedAt: string;
   totalGrand: number;
+  periodLabel: string;
 }
 
 const BAR_MAX = 245;
@@ -183,7 +184,7 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: '#9ca3af' },
 });
 
-function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand }: ReportDocProps) {
+function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLabel }: ReportDocProps) {
   const maxCat = Math.max(...categoryTotals.map((c) => c.amount), 1);
 
   return (
@@ -194,7 +195,7 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand }: ReportD
         <View style={s.header}>
           <View>
             <Text style={s.appName}>AuraCash</Text>
-            <Text style={s.reportSub}>Relatório de Valores a Receber</Text>
+            <Text style={s.reportSub}>Relatório de Valores a Receber — {periodLabel}</Text>
           </View>
           <View style={s.hRight}>
             <Text style={s.hDate}>Gerado em {generatedAt}</Text>
