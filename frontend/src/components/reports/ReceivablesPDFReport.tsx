@@ -104,6 +104,7 @@ const s = StyleSheet.create({
   },
   trowAlt: { backgroundColor: '#fafafa' },
   trowPartial: { backgroundColor: '#fffbeb' },
+  trowRemainder: { backgroundColor: '#eef2ff' },
   td: { fontSize: 8, color: '#334155' },
   tdBold: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#1e293b' },
   tdSub: { fontSize: 7, color: '#94a3b8', marginTop: 1 },
@@ -132,6 +133,14 @@ const s = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bPendingText: { fontSize: 6.5, color: '#92400e' },
+  bRemainder: {
+    backgroundColor: '#e0e7ff',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  bRemainderText: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#3730a3' },
 
   // Subtotal
   stRow: {
@@ -236,12 +245,13 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                 {/* Transaction rows */}
                 {debtor.transactions.map((tx, i) => {
                   const isPartial = tx.receiptStatus === 'partial';
+                  const isRemainder = !!tx.isPartialRemainder;
                   return (
                     <View
                       key={tx.id}
                       style={[
                         s.trow,
-                        ...(i % 2 === 1 ? [s.trowAlt] : []),
+                        ...(isRemainder ? [s.trowRemainder] : i % 2 === 1 ? [s.trowAlt] : []),
                         ...(isPartial ? [s.trowPartial] : []),
                       ]}
                     >
@@ -250,6 +260,9 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                         <Text style={s.td}>{tx.description}</Text>
                         {tx.category && (
                           <Text style={s.tdSub}>{tx.category.name}</Text>
+                        )}
+                        {isRemainder && (
+                          <Text style={[s.tdSub, { color: '#3730a3' }]}>↩ saldo de pgto parcial</Text>
                         )}
                       </View>
                       <Text style={[s.td, s.cMethod]}>
@@ -266,7 +279,11 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                         )}
                       </View>
                       <View style={[s.cStatus, { alignItems: 'flex-start' }]}>
-                        {isPartial ? (
+                        {isRemainder ? (
+                          <View style={s.bRemainder}>
+                            <Text style={s.bRemainderText}>SALDO</Text>
+                          </View>
+                        ) : isPartial ? (
                           <View style={s.bPartial}>
                             <Text style={s.bPartialText}>PARCIAL</Text>
                           </View>

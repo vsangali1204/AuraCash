@@ -93,6 +93,12 @@ class Transaction(models.Model):
     )
     received_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
+    # ── Partial remainder ─────────────────────────────────────────────────────
+    is_partial_remainder = models.BooleanField(
+        default=False,
+        help_text="Criado automaticamente como saldo de um recebimento parcial",
+    )
+
     # ── Recurrence ────────────────────────────────────────────────────────────
     recurrence = models.ForeignKey(
         "recurrences.Recurrence",

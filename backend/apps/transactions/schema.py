@@ -62,6 +62,7 @@ class TransactionType:
     receipt_status: Optional[str]
     received_amount: float
     remaining_amount: float
+    is_partial_remainder: bool
     is_pending_recurrence: bool
     notes: Optional[str]
     created_at: datetime
@@ -113,6 +114,7 @@ def map_transaction(t: Transaction) -> TransactionType:
         receipt_status=t.receipt_status,
         received_amount=round(float(t.received_amount), 2),
         remaining_amount=round(float(t.remaining_amount), 2),
+        is_partial_remainder=t.is_partial_remainder,
         is_pending_recurrence=t.is_pending_recurrence,
         notes=t.notes,
         created_at=t.created_at,

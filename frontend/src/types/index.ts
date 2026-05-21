@@ -73,6 +73,7 @@ export interface Transaction {
   receiptStatus?: string | null;
   receivedAmount: number;
   remainingAmount: number;
+  isPartialRemainder?: boolean;
   installmentNumber?: number | null;
   totalInstallments?: number | null;
   isPendingRecurrence: boolean;

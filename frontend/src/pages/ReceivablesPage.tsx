@@ -523,6 +523,7 @@ export function ReceivablesPage() {
     const isSelected = selected.has(tx.id);
     const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
     const isPartial = tx.receivedAmount > 0;
+    const isRemainder = !!tx.isPartialRemainder;
 
     return (
       <div
@@ -583,6 +584,11 @@ export function ReceivablesPage() {
                     {isOverdueItem ? "⚠ Venceu " : "Prev. "}{formatDate(tx.competenceDate)}
                   </span>
                 </>
+              )}
+              {isRemainder && (
+                <Badge variant="neutral" className="border border-indigo-500/30 bg-indigo-500/10 text-indigo-300">
+                  ↩ saldo parcial
+                </Badge>
               )}
               {tx.receiptStatus && (
                 <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>

@@ -25,6 +25,7 @@ export const RECEIVABLE_TRANSACTIONS_QUERY = gql`
       receiptStatus
       receivedAmount
       remainingAmount
+      isPartialRemainder
       debtorName
       installmentNumber
       totalInstallments

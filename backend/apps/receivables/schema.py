@@ -211,6 +211,7 @@ class ReceivableMutation:
                 debtor_name=tx.debtor_name,
                 receipt_status="pending",
                 received_amount=Decimal("0"),
+                is_partial_remainder=True,
                 notes=tx.notes,
             )
 
@@ -366,6 +367,7 @@ class ReceivableMutation:
                 debtor_name=tx.debtor_name,
                 receipt_status="pending",
                 received_amount=Decimal("0"),
+                is_partial_remainder=True,
                 notes=tx.notes,
             )
 
