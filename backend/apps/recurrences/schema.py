@@ -33,11 +33,22 @@ class RecurrenceType:
 
 def map_recurrence(rec: Recurrence) -> RecurrenceType:
     today = timezone.localdate()
-    next_exec = rec.get_execution_date(today.year, today.month)
-    if next_exec and next_exec < today:
-        nm = today.month + 1 if today.month < 12 else 1
-        ny = today.year if today.month < 12 else today.year + 1
-        next_exec = rec.get_execution_date(ny, nm)
+    # Busca a partir do mais tardio entre hoje e start_date
+    search_from = max(today, rec.start_date)
+    year, month = search_from.year, search_from.month
+
+    next_exec = None
+    for _ in range(25):  # varre até 25 meses à frente
+        candidate = rec.get_execution_date(year, month)
+        if candidate is not None and candidate >= search_from:
+            if rec.end_date is None or candidate <= rec.end_date:
+                next_exec = candidate
+            # se candidate > end_date, a recorrência encerrou: next_exec fica None
+            break
+        if month == 12:
+            year, month = year + 1, 1
+        else:
+            month += 1
 
     return RecurrenceType(
         id=strawberry.ID(str(rec.id)),
