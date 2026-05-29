@@ -179,7 +179,7 @@ export function RecurrencesPage() {
       endDate: data.endDate || null,
     };
     if (editing) {
-      updateRec({ variables: { input: { id: editing.id, ...baseInput } } });
+      updateRec({ variables: { input: { id: editing.id, ...baseInput, startDate: data.startDate } } });
     } else {
       createRec({
         variables: {

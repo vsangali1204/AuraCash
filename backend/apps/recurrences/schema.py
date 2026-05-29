@@ -89,7 +89,8 @@ class UpdateRecurrenceInput:
     use_business_day: Optional[bool] = None
     automatic: Optional[bool] = None
     is_active: Optional[bool] = None
-    end_date: Optional[date] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = strawberry.UNSET
     category_id: Optional[strawberry.ID] = None
 
 
@@ -195,7 +196,9 @@ class RecurrenceMutation:
             rec.automatic = input.automatic
         if input.is_active is not None:
             rec.is_active = input.is_active
-        if input.end_date is not None:
+        if input.start_date is not None:
+            rec.start_date = input.start_date
+        if input.end_date is not strawberry.UNSET:
             rec.end_date = input.end_date
         if input.category_id is not None:
             rec.category = Category.objects.filter(id=input.category_id, user=user).first()
