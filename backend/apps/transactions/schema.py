@@ -415,6 +415,10 @@ class TransactionQuery:
         for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type="income"):
             exec_date = rec.get_execution_date(year, month)
             if exec_date and exec_date > today:
+                if exec_date < rec.start_date:
+                    continue
+                if rec.end_date is not None and exec_date > rec.end_date:
+                    continue
                 already = Transaction.objects.filter(
                     recurrence=rec, date__year=year, date__month=month
                 ).exists()
@@ -456,6 +460,10 @@ class TransactionQuery:
         ).exclude(payment_method="credit"):
             exec_date = rec.get_execution_date(year, month)
             if exec_date and exec_date > today:
+                if exec_date < rec.start_date:
+                    continue
+                if rec.end_date is not None and exec_date > rec.end_date:
+                    continue
                 already = Transaction.objects.filter(
                     recurrence=rec, date__year=year, date__month=month
                 ).exists()
@@ -619,6 +627,10 @@ class TransactionQuery:
         for rec in recurrences:
             exec_date = rec.get_execution_date(year, month)
             if exec_date:
+                if exec_date < rec.start_date:
+                    continue
+                if rec.end_date is not None and exec_date > rec.end_date:
+                    continue
                 color = "#10b981" if rec.recurrence_type == "income" else "#8b5cf6"
                 events.append(CalendarEvent(
                     date=exec_date,
