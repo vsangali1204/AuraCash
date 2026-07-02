@@ -75,6 +75,8 @@ export const DASHBOARD_SUMMARY_QUERY = gql`
       futureIncomeAmount
       pendingInvoicesAmount
       futureExpensesAmount
+      recurrenceIncomeAmount
+      recurrenceExpensesAmount
       projectedBalance
       pendingRecurrencesCount
       expenseByCategory {

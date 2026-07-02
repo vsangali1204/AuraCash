@@ -210,6 +210,10 @@ export function DashboardPage() {
                 <span className="text-xs text-gray-500">A receber (cobranças)</span>
                 <span className="text-sm font-medium text-amber-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Recorrências a entrar</span>
+                <span className="text-sm font-medium text-violet-400">+ {formatCurrency(summary?.recurrenceIncomeAmount ?? 0)}</span>
+              </div>
             </div>
 
             {/* Divider */}
@@ -226,6 +230,10 @@ export function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">Boletos / débitos futuros</span>
                 <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">Recorrências a pagar</span>
+                <span className="text-sm font-medium text-violet-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-1">
                 <span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span>

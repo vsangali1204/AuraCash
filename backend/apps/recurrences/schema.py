@@ -237,65 +237,17 @@ class RecurrenceMutation:
 
     @strawberry.mutation
     def process_recurrences(self, info: strawberry.types.Info) -> int:
-        """Gera lançamentos pendentes para recorrências do mês atual. Retorna a quantidade criada."""
-        from apps.transactions.models import Transaction
+        """Gera lançamentos pendentes para recorrências vencidas do mês atual (com catch-up). Retorna a quantidade criada."""
+        from .services import process_due_recurrences
 
         user = require_auth(info)
-        today = timezone.localdate()
-        created = 0
-
-        recurrences = Recurrence.objects.filter(
-            user=user,
-            is_active=True,
-            start_date__lte=today,
-        ).filter(
-            __import__("django.db.models", fromlist=["Q"]).Q(end_date__isnull=True)
-            | __import__("django.db.models", fromlist=["Q"]).Q(end_date__gte=today)
-        ).select_related("account", "credit_card", "category")
-
-        for rec in recurrences:
-            exec_date = rec.get_execution_date(today.year, today.month)
-            if not exec_date or exec_date != today:
-                continue
-
-            already_done = Transaction.objects.filter(
-                recurrence=rec,
-                date__year=today.year,
-                date__month=today.month,
-            ).exists()
-            if already_done:
-                continue
-
-            kwargs = dict(
-                user=user,
-                description=rec.description,
-                amount=rec.amount,
-                transaction_type=rec.recurrence_type,
-                payment_method=rec.payment_method,
-                date=exec_date,
-                account=rec.account if rec.payment_method != "credit" else None,
-                category=rec.category,
-                recurrence=rec,
-            )
-
-            if rec.payment_method == "credit" and rec.credit_card:
-                from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
-                first_month = get_first_invoice_month(rec.credit_card, exec_date)
-                invoice = get_or_create_invoice(rec.credit_card, first_month)
-                kwargs["credit_card"] = rec.credit_card
-                kwargs["invoice"] = invoice
-                kwargs["installment_number"] = 1
-                kwargs["total_installments"] = 1
-
-            Transaction.objects.create(**kwargs, is_pending_recurrence=not rec.automatic)
-            created += 1
-
-        return created
+        return process_due_recurrences(user=user)
 
     @strawberry.mutation
     def reprocess_recurrence(self, info: strawberry.types.Info, id: strawberry.ID) -> int:
         """Apaga o lançamento pendente deste mês para esta recorrência e recria com as configurações atuais. Retorna 1 se criado, 0 se fora do dia de execução."""
         from apps.transactions.models import Transaction
+        from .services import create_transaction_for_recurrence
 
         user = require_auth(info)
         rec = Recurrence.objects.filter(id=id, user=user).select_related(
@@ -317,26 +269,5 @@ class RecurrenceMutation:
         if not exec_date:
             return 0
 
-        kwargs = dict(
-            user=user,
-            description=rec.description,
-            amount=rec.amount,
-            transaction_type=rec.recurrence_type,
-            payment_method=rec.payment_method,
-            date=exec_date,
-            account=rec.account if rec.payment_method != "credit" else None,
-            category=rec.category,
-            recurrence=rec,
-        )
-
-        if rec.payment_method == "credit" and rec.credit_card:
-            from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
-            first_month = get_first_invoice_month(rec.credit_card, exec_date)
-            invoice = get_or_create_invoice(rec.credit_card, first_month)
-            kwargs["credit_card"] = rec.credit_card
-            kwargs["invoice"] = invoice
-            kwargs["installment_number"] = 1
-            kwargs["total_installments"] = 1
-
-        Transaction.objects.create(**kwargs, is_pending_recurrence=not rec.automatic)
+        create_transaction_for_recurrence(rec, exec_date)
         return 1

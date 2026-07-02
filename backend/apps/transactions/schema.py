@@ -150,7 +150,9 @@ class DashboardSummary:
     future_income_amount: float    # receitas ainda a entrar este mês (date > hoje)
     pending_invoices_amount: float # faturas com vencimento este mês, ainda não pagas
     future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
-    projected_balance: float       # total_balance + future_income + receivable - invoices - future_expenses
+    recurrence_income_amount: float   # recorrências de receita do mês ainda não efetivadas
+    recurrence_expenses_amount: float # recorrências de despesa do mês ainda não efetivadas (inclui cartão)
+    projected_balance: float       # total_balance + future_income + rec_income + receivable - invoices - future_expenses - rec_expenses
     pending_recurrences_count: int
     expense_by_category: list[CategoryExpense]
     income_by_category: list[CategoryExpense]
@@ -404,17 +406,22 @@ class TransactionQuery:
         today = timezone.localdate()
 
         # Receitas ainda a entrar este mês: transações já lançadas com date > hoje
-        future_income_tx = float(Transaction.objects.filter(
+        future_income_amount = float(Transaction.objects.filter(
             user=user, transaction_type="income",
             date__year=year, date__month=month, date__gt=today,
             is_pending_recurrence=False,
         ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"])
 
-        # + recorrências de receita que ainda não geraram transação neste mês
-        rec_income = Decimal("0")
-        for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type="income"):
-            exec_date = rec.get_execution_date(year, month)
-            if exec_date and exec_date > today:
+        # Recorrências do mês ainda não efetivadas (label próprio na projeção):
+        # soma as que ainda não geraram lançamento no mês — independente de a
+        # data já ter passado — mais os lançamentos pendentes de confirmação.
+        # Cartão entra aqui até ser processado; depois passa a contar na fatura.
+        def _unprocessed_recurrences(rtype: str) -> Decimal:
+            total = Decimal("0")
+            for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type=rtype):
+                exec_date = rec.get_execution_date(year, month)
+                if not exec_date:
+                    continue
                 if exec_date < rec.start_date:
                     continue
                 if rec.end_date is not None and exec_date > rec.end_date:
@@ -423,9 +430,27 @@ class TransactionQuery:
                     recurrence=rec, date__year=year, date__month=month
                 ).exists()
                 if not already:
-                    rec_income += rec.amount
+                    total += rec.amount
+            return total
 
-        future_income_amount = future_income_tx + float(rec_income)
+        # Lançamentos de recorrência aguardando confirmação (não-cartão; os de
+        # cartão já entram no total da fatura correspondente)
+        pending_rec_agg = Transaction.objects.filter(
+            user=user, is_pending_recurrence=True,
+            date__year=year, date__month=month,
+        ).exclude(payment_method="credit").aggregate(
+            income=Coalesce(
+                Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                Value(0), output_field=DecimalField(),
+            ),
+            expense=Coalesce(
+                Sum(Case(When(transaction_type="expense", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                Value(0), output_field=DecimalField(),
+            ),
+        )
+
+        recurrence_income_amount = float(_unprocessed_recurrences("income") + pending_rec_agg["income"])
+        recurrence_expenses_amount = float(_unprocessed_recurrences("expense") + pending_rec_agg["expense"])
 
         # Faturas com vencimento este mês ainda não pagas
         pending_invoices_qs = InvoiceModel.objects.filter(
@@ -445,32 +470,13 @@ class TransactionQuery:
         pending_invoices_amount = max(0.0, float(inv_tx_total) - float(inv_paid_total))
 
         # Despesas futuras não-cartão: transações já lançadas com date > hoje
-        future_expenses_tx = float(Transaction.objects.filter(
+        future_expenses_amount = float(Transaction.objects.filter(
             user=user, transaction_type="expense",
             date__year=year, date__month=month, date__gt=today,
             is_pending_recurrence=False,
         ).exclude(payment_method="credit").aggregate(
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
         )["total"])
-
-        # + recorrências de despesa não-cartão que ainda não geraram transação
-        rec_expenses = Decimal("0")
-        for rec in Recurrence.objects.filter(
-            user=user, is_active=True, recurrence_type="expense"
-        ).exclude(payment_method="credit"):
-            exec_date = rec.get_execution_date(year, month)
-            if exec_date and exec_date > today:
-                if exec_date < rec.start_date:
-                    continue
-                if rec.end_date is not None and exec_date > rec.end_date:
-                    continue
-                already = Transaction.objects.filter(
-                    recurrence=rec, date__year=year, date__month=month
-                ).exists()
-                if not already:
-                    rec_expenses += rec.amount
-
-        future_expenses_amount = future_expenses_tx + float(rec_expenses)
 
         # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
@@ -573,7 +579,12 @@ class TransactionQuery:
             future_income_amount=future_income_amount,
             pending_invoices_amount=pending_invoices_amount,
             future_expenses_amount=future_expenses_amount,
-            projected_balance=total_balance + future_income_amount + month_receivable - pending_invoices_amount - future_expenses_amount,
+            recurrence_income_amount=recurrence_income_amount,
+            recurrence_expenses_amount=recurrence_expenses_amount,
+            projected_balance=(
+                total_balance + future_income_amount + recurrence_income_amount + month_receivable
+                - pending_invoices_amount - future_expenses_amount - recurrence_expenses_amount
+            ),
             pending_recurrences_count=pending_recurrences_count,
             expense_by_category=expense_by_category,
             income_by_category=income_by_category,
