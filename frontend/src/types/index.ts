@@ -101,6 +101,8 @@ export interface Recurrence {
   categoryName?: string | null;
   nextExecutionDate?: string | null;
   automatic: boolean;
+  isReceivable: boolean;
+  debtorName?: string | null;
 }
 
 export interface ReceivableSummary {

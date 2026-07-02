@@ -54,6 +54,11 @@ class Recurrence(models.Model):
         default=False,
         help_text="Se True, efetiva o lançamento direto no saldo sem pedir confirmação",
     )
+    is_receivable = models.BooleanField(
+        default=False,
+        help_text="Se True, os lançamentos gerados são cobranças (a receber)",
+    )
+    debtor_name = models.CharField(max_length=255, null=True, blank=True)
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
 

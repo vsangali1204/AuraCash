@@ -27,6 +27,9 @@ def create_transaction_for_recurrence(rec, exec_date: date):
         account=rec.account if rec.payment_method != "credit" else None,
         category=rec.category,
         recurrence=rec,
+        is_receivable=rec.is_receivable,
+        debtor_name=rec.debtor_name if rec.is_receivable else None,
+        receipt_status="pending" if rec.is_receivable else None,
     )
 
     if rec.payment_method == "credit" and rec.credit_card:

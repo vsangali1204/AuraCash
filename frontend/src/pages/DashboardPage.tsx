@@ -93,6 +93,9 @@ export function DashboardPage() {
   const pendingCount = summary?.pendingRecurrencesCount ?? pendingRecurrences.length;
   const totalReceivable = roundMoney(receivables.reduce((s, r) => roundMoney(s + r.pendingAmount), 0));
 
+  const projectedIn = (summary?.futureIncomeAmount ?? 0) + (summary?.monthReceivable ?? 0) + (summary?.recurrenceIncomeAmount ?? 0);
+  const projectedOut = (summary?.pendingInvoicesAmount ?? 0) + (summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0);
+
   const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
     .toLocaleString("pt-BR", { month: "long", year: "numeric" });
   const balanceHistory = summary?.balanceHistory ?? [];
@@ -194,53 +197,70 @@ export function DashboardPage() {
         {summaryLoading ? (
           <div className="h-24 animate-pulse rounded bg-surface-border" />
         ) : (
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-0">
-            {/* Entradas */}
-            <div className="flex-1 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-3">Entradas previstas</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Saldo atual em contas</span>
-                <span className="text-sm font-medium text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
+          <div>
+            {/* Ponto de partida */}
+            <div className="flex items-center justify-between pb-3 border-b border-surface-border">
+              <span className="text-sm text-gray-300">Saldo atual em contas</span>
+              <span className="text-sm font-semibold text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 py-4">
+              {/* Entradas */}
+              <div className="flex-1 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/70 mb-3">O que ainda entra</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Receitas agendadas</span>
+                  <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.futureIncomeAmount ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Recorrências (salário etc.)</span>
+                  <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.recurrenceIncomeAmount ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Cobranças a receber</span>
+                  <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-surface-border/60 pt-2 mt-1">
+                  <span className="text-xs font-semibold text-gray-400">Total de entradas</span>
+                  <span className="text-sm font-bold text-emerald-400">+ {formatCurrency(projectedIn)}</span>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Receitas a entrar este mês</span>
-                <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.futureIncomeAmount ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">A receber (cobranças)</span>
-                <span className="text-sm font-medium text-amber-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Recorrências a entrar</span>
-                <span className="text-sm font-medium text-violet-400">+ {formatCurrency(summary?.recurrenceIncomeAmount ?? 0)}</span>
+
+              {/* Divider */}
+              <div className="hidden sm:block w-px bg-surface-border mx-6" />
+              <div className="block sm:hidden h-px bg-surface-border" />
+
+              {/* Saídas */}
+              <div className="flex-1 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-500/70 mb-3">O que ainda sai</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Faturas de cartão</span>
+                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.pendingInvoicesAmount ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Boletos / débitos agendados</span>
+                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Recorrências (contas fixas)</span>
+                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-surface-border/60 pt-2 mt-1">
+                  <span className="text-xs font-semibold text-gray-400">Total de saídas</span>
+                  <span className="text-sm font-bold text-red-400">− {formatCurrency(projectedOut)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className="hidden sm:block w-px bg-surface-border mx-6" />
-            <div className="block sm:hidden h-px bg-surface-border" />
-
-            {/* Saídas + resultado */}
-            <div className="flex-1 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-600 mb-3">Saídas pendentes</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Faturas a vencer este mês</span>
-                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.pendingInvoicesAmount ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Boletos / débitos futuros</span>
-                <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-500">Recorrências a pagar</span>
-                <span className="text-sm font-medium text-violet-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
-              </div>
-              <div className="flex items-center justify-between border-t border-surface-border pt-2 mt-1">
+            {/* Resultado */}
+            <div className="flex items-center justify-between border-t border-surface-border pt-3">
+              <div>
                 <span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span>
-                <span className={`text-base font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-sky-300" : "text-red-400"}`}>
-                  {formatCurrency(summary?.projectedBalance ?? 0)}
-                </span>
+                <p className="text-[11px] text-gray-600">saldo atual + entradas − saídas</p>
               </div>
+              <span className={`text-lg font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-sky-300" : "text-red-400"}`}>
+                {formatCurrency(summary?.projectedBalance ?? 0)}
+              </span>
             </div>
           </div>
         )}

@@ -20,6 +20,8 @@ class RecurrenceType:
     use_business_day: bool
     is_active: bool
     automatic: bool
+    is_receivable: bool
+    debtor_name: Optional[str]
     start_date: date
     end_date: Optional[date]
     account_id: strawberry.ID
@@ -60,6 +62,8 @@ def map_recurrence(rec: Recurrence) -> RecurrenceType:
         use_business_day=rec.use_business_day,
         is_active=rec.is_active,
         automatic=rec.automatic,
+        is_receivable=rec.is_receivable,
+        debtor_name=rec.debtor_name,
         start_date=rec.start_date,
         end_date=rec.end_date,
         account_id=strawberry.ID(str(rec.account_id)),
@@ -85,6 +89,8 @@ class CreateRecurrenceInput:
     category_id: Optional[strawberry.ID] = None
     use_business_day: bool = False
     automatic: bool = False
+    is_receivable: bool = False
+    debtor_name: Optional[str] = None
     end_date: Optional[date] = None
 
 
@@ -99,6 +105,8 @@ class UpdateRecurrenceInput:
     day_of_month: Optional[int] = None
     use_business_day: Optional[bool] = None
     automatic: Optional[bool] = None
+    is_receivable: Optional[bool] = None
+    debtor_name: Optional[str] = None
     is_active: Optional[bool] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = strawberry.UNSET
@@ -168,6 +176,8 @@ class RecurrenceMutation:
             day_of_month=input.day_of_month,
             use_business_day=input.use_business_day,
             automatic=input.automatic,
+            is_receivable=input.is_receivable,
+            debtor_name=input.debtor_name if input.is_receivable else None,
             start_date=input.start_date,
             end_date=input.end_date,
         )
@@ -205,6 +215,12 @@ class RecurrenceMutation:
             rec.use_business_day = input.use_business_day
         if input.automatic is not None:
             rec.automatic = input.automatic
+        if input.is_receivable is not None:
+            rec.is_receivable = input.is_receivable
+            if not input.is_receivable:
+                rec.debtor_name = None
+        if input.debtor_name is not None and rec.is_receivable:
+            rec.debtor_name = input.debtor_name
         if input.is_active is not None:
             rec.is_active = input.is_active
         if input.start_date is not None:

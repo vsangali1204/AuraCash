@@ -11,6 +11,8 @@ const RECURRENCE_FIELDS = gql`
     useBusinessDay
     isActive
     automatic
+    isReceivable
+    debtorName
     startDate
     endDate
     accountId

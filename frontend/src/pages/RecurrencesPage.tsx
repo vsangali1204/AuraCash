@@ -38,7 +38,12 @@ const schema = z.object({
   categoryId: z.string().optional(),
   useBusinessDay: z.boolean().default(false),
   automatic: z.boolean().default(false),
+  isReceivable: z.boolean().default(false),
+  debtorName: z.string().optional(),
   endDate: z.string().optional(),
+}).refine((d) => !d.isReceivable || (d.debtorName ?? "").trim().length > 0, {
+  message: "Informe quem deve pagar",
+  path: ["debtorName"],
 });
 
 type FormData = z.infer<typeof schema>;
@@ -89,11 +94,12 @@ export function RecurrencesPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       recurrenceType: "expense", paymentMethod: "pix",
-      dayOfMonth: 1, useBusinessDay: false, automatic: false, startDate: todayISO(),
+      dayOfMonth: 1, useBusinessDay: false, automatic: false, isReceivable: false, startDate: todayISO(),
     },
   });
 
   const paymentMethod = watch("paymentMethod");
+  const isReceivable = watch("isReceivable");
 
   const [createRec, { loading: creating }] = useMutation(CREATE_RECURRENCE_MUTATION, {
     refetchQueries: [RECURRENCES_QUERY],
@@ -145,7 +151,7 @@ export function RecurrencesPage() {
 
   function openCreate() {
     setEditing(null);
-    reset({ recurrenceType: "expense", paymentMethod: "pix", dayOfMonth: 1, useBusinessDay: false, automatic: false, startDate: todayISO() });
+    reset({ recurrenceType: "expense", paymentMethod: "pix", dayOfMonth: 1, useBusinessDay: false, automatic: false, isReceivable: false, debtorName: "", startDate: todayISO() });
     setModalOpen(true);
   }
 
@@ -158,6 +164,8 @@ export function RecurrencesPage() {
       startDate: rec.startDate, creditCardId: rec.creditCardId ?? "",
       categoryId: rec.categoryId ?? "", useBusinessDay: rec.useBusinessDay,
       automatic: rec.automatic,
+      isReceivable: rec.isReceivable,
+      debtorName: rec.debtorName ?? "",
       endDate: rec.endDate ?? "",
     });
     setModalOpen(true);
@@ -175,6 +183,8 @@ export function RecurrencesPage() {
       dayOfMonth: data.dayOfMonth,
       useBusinessDay: data.useBusinessDay,
       automatic: data.automatic,
+      isReceivable: data.isReceivable,
+      debtorName: data.isReceivable ? (data.debtorName?.trim() || null) : null,
       categoryId: data.categoryId || null,
       endDate: data.endDate || null,
     };
@@ -276,6 +286,11 @@ export function RecurrencesPage() {
                     ? <Badge variant="neutral" className="text-sky-400 border-sky-500/30">Automático</Badge>
                     : <Badge variant="neutral" className="text-amber-400 border-amber-500/30">Confirmação</Badge>
                   }
+                  {rec.isReceivable && (
+                    <Badge variant="neutral" className="text-amber-400 border-amber-500/30">
+                      A receber{rec.debtorName ? ` · ${rec.debtorName}` : ""}
+                    </Badge>
+                  )}
                   {!rec.isActive && <Badge variant="neutral">Pausada</Badge>}
                 </div>
                 <p className={`text-lg font-bold ${rec.recurrenceType === "income" ? "text-emerald-400" : "text-red-400"}`}>
@@ -323,7 +338,16 @@ export function RecurrencesPage() {
                 Automático <span className="text-gray-500">(efetiva direto no saldo, sem pedir confirmação)</span>
               </label>
             </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="isReceivable" className="h-4 w-4 rounded border-surface-border bg-surface-card accent-amber-500" {...register("isReceivable")} />
+              <label htmlFor="isReceivable" className="text-sm text-gray-300">
+                É uma cobrança <span className="text-gray-500">(os lançamentos gerados entram em "A Receber")</span>
+              </label>
+            </div>
           </div>
+          {isReceivable && (
+            <Input label="Quem deve pagar" placeholder="Ex: João, Mãe, Cliente X" error={errors.debtorName?.message} {...register("debtorName")} />
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Data de início" type="date" error={errors.startDate?.message} {...register("startDate")} />
             <Input label="Data de término (opcional)" type="date" {...register("endDate")} />
