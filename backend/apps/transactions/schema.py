@@ -449,8 +449,16 @@ class TransactionQuery:
             ),
         )
 
-        recurrence_income_amount = float(_unprocessed_recurrences("income") + pending_rec_agg["income"])
-        recurrence_expenses_amount = float(_unprocessed_recurrences("expense") + pending_rec_agg["expense"])
+        # Em meses passados não há mais nada "a processar": os lançamentos ou
+        # aconteceram (muitas vezes manualmente, sem vínculo com a recorrência)
+        # ou não aconteceram — somar a recorrência de novo duplicaria a conta.
+        is_past_month = (year, month) < (today.year, today.month)
+        if is_past_month:
+            recurrence_income_amount = float(pending_rec_agg["income"])
+            recurrence_expenses_amount = float(pending_rec_agg["expense"])
+        else:
+            recurrence_income_amount = float(_unprocessed_recurrences("income") + pending_rec_agg["income"])
+            recurrence_expenses_amount = float(_unprocessed_recurrences("expense") + pending_rec_agg["expense"])
 
         # Faturas com vencimento este mês ainda não pagas
         pending_invoices_qs = InvoiceModel.objects.filter(

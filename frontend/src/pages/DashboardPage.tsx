@@ -209,16 +209,22 @@ export function DashboardPage() {
               <div className="flex-1 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500/70 mb-3">O que ainda entra</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Receitas agendadas</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Receitas agendadas
+                  </span>
                   <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.futureIncomeAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Recorrências (salário etc.)</span>
-                  <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.recurrenceIncomeAmount ?? 0)}</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />Recorrências (salário etc.)
+                  </span>
+                  <span className="text-sm font-medium text-violet-400">+ {formatCurrency(summary?.recurrenceIncomeAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Cobranças a receber</span>
-                  <span className="text-sm font-medium text-emerald-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Cobranças a receber
+                  </span>
+                  <span className="text-sm font-medium text-amber-400">+ {formatCurrency(summary?.monthReceivable ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-surface-border/60 pt-2 mt-1">
                   <span className="text-xs font-semibold text-gray-400">Total de entradas</span>
@@ -234,16 +240,22 @@ export function DashboardPage() {
               <div className="flex-1 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-red-500/70 mb-3">O que ainda sai</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Faturas de cartão</span>
-                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.pendingInvoicesAmount ?? 0)}</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />Faturas de cartão
+                  </span>
+                  <span className="text-sm font-medium text-orange-400">− {formatCurrency(summary?.pendingInvoicesAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Boletos / débitos agendados</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />Boletos / débitos agendados
+                  </span>
                   <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Recorrências (contas fixas)</span>
-                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
+                  <span className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />Recorrências (contas fixas)
+                  </span>
+                  <span className="text-sm font-medium text-violet-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-surface-border/60 pt-2 mt-1">
                   <span className="text-xs font-semibold text-gray-400">Total de saídas</span>
@@ -256,7 +268,9 @@ export function DashboardPage() {
             <div className="flex items-center justify-between border-t border-surface-border pt-3">
               <div>
                 <span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span>
-                <p className="text-[11px] text-gray-600">saldo atual + entradas − saídas</p>
+                <p className="text-[11px] text-gray-600">
+                  {formatCurrency(summary?.totalBalance ?? 0)} <span className="text-emerald-500">+ {formatCurrency(projectedIn)}</span> <span className="text-red-500">− {formatCurrency(projectedOut)}</span>
+                </p>
               </div>
               <span className={`text-lg font-bold ${(summary?.projectedBalance ?? 0) >= 0 ? "text-sky-300" : "text-red-400"}`}>
                 {formatCurrency(summary?.projectedBalance ?? 0)}
