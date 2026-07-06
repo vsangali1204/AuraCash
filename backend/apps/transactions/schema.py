@@ -140,6 +140,18 @@ def map_transaction(t: Transaction) -> TransactionType:
     )
 
 
+def _with_effective_date(qs):
+    """Data "efetiva" para relatórios mensais: competence_date quando existir
+    (parcelas e compras no cartão, cujo caixa só sai no vencimento da fatura
+    correspondente — que pode ser um mês diferente do da compra), senão a
+    própria date. Também exclui a transação-pai de parcelamentos: ela guarda
+    o valor total da compra só para referência, e sem isso entraria somada
+    de novo por cima das parcelas filhas no mesmo mês da compra."""
+    return qs.exclude(parent_transaction__isnull=True, total_installments__gt=1).annotate(
+        effective_date=Coalesce("competence_date", "date")
+    )
+
+
 # ── Dashboard types ───────────────────────────────────────────────────────────
 
 @strawberry.type
@@ -383,9 +395,9 @@ class TransactionQuery:
         )
 
         # ── Mês corrente ─────────────────────────────────────────────────────
-        month_agg = Transaction.objects.filter(
-            user=user, date__year=year, date__month=month, is_pending_recurrence=False
-        ).aggregate(
+        month_agg = _with_effective_date(
+            Transaction.objects.filter(user=user, is_pending_recurrence=False)
+        ).filter(effective_date__year=year, effective_date__month=month).aggregate(
             month_income=Coalesce(
                 Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
                 Value(0), output_field=DecimalField(),
@@ -573,11 +585,11 @@ class TransactionQuery:
 
         # ── Despesas por categoria ────────────────────────────────────────────
         cat_data = (
-            Transaction.objects.filter(
-                user=user, date__year=year, date__month=month,
-                transaction_type="expense", category__isnull=False,
+            _with_effective_date(Transaction.objects.filter(
+                user=user, transaction_type="expense", category__isnull=False,
                 is_pending_recurrence=False,
-            )
+            ))
+            .filter(effective_date__year=year, effective_date__month=month)
             .values("category__name", "category__color")
             .annotate(total=Sum("amount"))
             .order_by("-total")
@@ -595,11 +607,11 @@ class TransactionQuery:
 
         # ── Receitas por categoria ────────────────────────────────────────────
         inc_cat_data = (
-            Transaction.objects.filter(
-                user=user, date__year=year, date__month=month,
-                transaction_type="income", category__isnull=False,
+            _with_effective_date(Transaction.objects.filter(
+                user=user, transaction_type="income", category__isnull=False,
                 is_pending_recurrence=False,
-            )
+            ))
+            .filter(effective_date__year=year, effective_date__month=month)
             .values("category__name", "category__color")
             .annotate(total=Sum("amount"))
             .order_by("-total")
@@ -633,14 +645,13 @@ class TransactionQuery:
         last_date = date(last_y, last_m, _calendar.monthrange(last_y, last_m)[1])
 
         raw = (
-            Transaction.objects.filter(
+            _with_effective_date(Transaction.objects.filter(
                 user=user,
-                date__gte=first_date,
-                date__lte=last_date,
                 transaction_type__in=["income", "expense"],
                 is_pending_recurrence=False,
-            )
-            .annotate(y=ExtractYear("date"), m=ExtractMonth("date"))
+            ))
+            .filter(effective_date__gte=first_date, effective_date__lte=last_date)
+            .annotate(y=ExtractYear("effective_date"), m=ExtractMonth("effective_date"))
             .values("y", "m")
             .annotate(
                 income=Coalesce(
@@ -783,13 +794,11 @@ class TransactionQuery:
         user = require_auth(info)
 
         rows = (
-            Transaction.objects.filter(
+            _with_effective_date(Transaction.objects.filter(
                 user=user,
                 transaction_type="expense",
-                date__year=year,
-                date__month=month,
-                parent_transaction__isnull=True,
-            )
+            ))
+            .filter(effective_date__year=year, effective_date__month=month)
             .values("payment_method")
             .annotate(total=Sum("amount"), count=Count("id"))
             .order_by("-total")
