@@ -494,9 +494,17 @@ class TransactionQuery:
             due_date__month=month,
         ).exclude(status=InvoiceModel.Status.PAID)
 
+        # Estornos (transaction_type="income") entram como negativo: mesma regra
+        # usada em Invoice.total_amount, senão o estorno é somado em vez de
+        # abatido e a fatura fica em dobro do valor real.
         inv_tx_total = Transaction.objects.filter(
             user=user, invoice__in=pending_invoices_qs,
-        ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"]
+        ).aggregate(
+            total=Coalesce(
+                Sum(Case(When(transaction_type="income", then=-F("amount")), default=F("amount"), output_field=DecimalField())),
+                Value(0), output_field=DecimalField(),
+            )
+        )["total"]
 
         inv_paid_total = pending_invoices_qs.aggregate(
             total=Coalesce(Sum("paid_amount"), Value(0), output_field=DecimalField())
