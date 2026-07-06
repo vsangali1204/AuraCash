@@ -438,10 +438,14 @@ class TransactionQuery:
         # Recorrências do mês ainda não efetivadas (label próprio na projeção):
         # soma as que ainda não geraram lançamento no mês — independente de a
         # data já ter passado — mais os lançamentos pendentes de confirmação.
-        # Cartão entra aqui até ser processado; depois passa a contar na fatura.
+        # Cartão de crédito fica de fora: o gasto só sai da conta quando a
+        # fatura correspondente vence (que pode ser só no mês seguinte, a
+        # depender do fechamento do cartão), então ele já é representado em
+        # "Faturas de cartão" assim que a recorrência é processada — contar
+        # aqui também adiantaria a despesa para o mês errado.
         def _unprocessed_recurrences(rtype: str) -> Decimal:
             total = Decimal("0")
-            for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type=rtype):
+            for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type=rtype).exclude(payment_method="credit"):
                 exec_date = rec.get_execution_date(year, month)
                 if not exec_date:
                     continue
