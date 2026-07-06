@@ -69,6 +69,7 @@ export function RegisterPage() {
           <Input
             label="Nome"
             placeholder="Seu nome"
+            autoComplete="name"
             error={errors.name?.message}
             {...register("name")}
           />
@@ -76,6 +77,7 @@ export function RegisterPage() {
             label="E-mail"
             type="email"
             placeholder="seu@email.com"
+            autoComplete="email"
             error={errors.email?.message}
             {...register("email")}
           />
@@ -83,6 +85,7 @@ export function RegisterPage() {
             label="Senha"
             type="password"
             placeholder="Mínimo 8 caracteres"
+            autoComplete="new-password"
             error={errors.password?.message}
             {...register("password")}
           />
@@ -90,6 +93,7 @@ export function RegisterPage() {
             label="Confirmar senha"
             type="password"
             placeholder="Repita a senha"
+            autoComplete="new-password"
             error={errors.confirmPassword?.message}
             {...register("confirmPassword")}
           />

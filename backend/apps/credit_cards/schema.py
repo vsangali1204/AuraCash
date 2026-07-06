@@ -60,11 +60,19 @@ def map_invoice_with_card(inv: Invoice) -> InvoiceWithCardType:
         due_date=inv.due_date,
         total_amount=float(inv.total_amount),
         paid_amount=float(inv.paid_amount),
-        status=inv.status,
+        status=_effective_status(inv),
         credit_card_id=strawberry.ID(str(inv.credit_card_id)),
         credit_card_name=inv.credit_card.name,
         credit_card_brand=inv.credit_card.brand,
     )
+
+
+def _effective_status(inv: Invoice) -> str:
+    """Derives the display status from the stored status and the closing date.
+    An OPEN invoice whose closing_date is in the past is shown as CLOSED."""
+    if inv.status == Invoice.Status.OPEN and inv.closing_date < date.today():
+        return Invoice.Status.CLOSED
+    return inv.status
 
 
 def map_invoice(inv: Invoice) -> InvoiceType:
@@ -75,7 +83,7 @@ def map_invoice(inv: Invoice) -> InvoiceType:
         due_date=inv.due_date,
         total_amount=float(inv.total_amount),
         paid_amount=float(inv.paid_amount),
-        status=inv.status,
+        status=_effective_status(inv),
     )
 
 

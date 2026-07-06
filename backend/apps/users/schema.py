@@ -61,12 +61,16 @@ class UserQuery:
 class UserMutation:
     @strawberry.mutation
     def register(self, input: RegisterInput) -> AuthPayload:
+        if not input.name.strip():
+            raise ValueError("Nome não pode ser vazio.")
+        if len(input.password) < 8:
+            raise ValueError("Senha deve ter pelo menos 8 caracteres.")
         if User.objects.filter(email=input.email).exists():
             raise Exception("Este e-mail já está cadastrado.")
 
         user = User.objects.create_user(
             email=input.email,
-            name=input.name,
+            name=input.name.strip(),
             password=input.password,
         )
         tokens = generate_tokens(user.id)
@@ -135,6 +139,8 @@ class UserMutation:
 
     @strawberry.mutation
     def reset_password(self, uid: str, token: str, new_password: str) -> bool:
+        if len(new_password) < 8:
+            raise ValueError("Senha deve ter pelo menos 8 caracteres.")
         try:
             user_pk = base64.urlsafe_b64decode(uid.encode()).decode()
             user = User.objects.get(pk=user_pk, is_active=True)

@@ -75,18 +75,18 @@ class Recurrence(models.Model):
         if not self.use_business_day:
             max_day = calendar.monthrange(year, month)[1]
             return date(year, month, min(self.day_of_month, max_day))
-        # N-ésimo dia útil (desconsiderando fins de semana)
+        # N-ésimo dia útil (segunda a sexta — fins de semana excluídos)
         n = self.day_of_month
         count = 0
         for d in range(1, calendar.monthrange(year, month)[1] + 1):
             dt = date(year, month, d)
-            if dt.weekday() < 6:  # segunda a sábado (domingo=6 é ignorado)
+            if dt.weekday() < 5:  # segunda(0) a sexta(4) apenas
                 count += 1
                 if count == n:
                     return dt
-        # Se N > dias úteis do mês, retorna o último dia útil
+        # Se N > dias úteis do mês, retorna a última sexta-feira do mês
         for d in range(calendar.monthrange(year, month)[1], 0, -1):
             dt = date(year, month, d)
-            if dt.weekday() < 6:
+            if dt.weekday() < 5:
                 return dt
         return None

@@ -75,6 +75,7 @@ export const CREATE_RECEIPT_MUTATION = gql`
       amountReceived
       receiptDate
       destinationAccountName
+      notes
     }
   }
 `;

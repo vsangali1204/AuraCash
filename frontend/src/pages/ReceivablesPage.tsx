@@ -320,8 +320,8 @@ export function ReceivablesPage() {
   const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
 
   function getNextMonthISO(): string {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 30);
+    // Retorna o primeiro dia do próximo mês como data padrão de adiamento
+    const d = new Date(nextY, nextM - 1, 1);
     return d.toISOString().split("T")[0];
   }
 
@@ -369,21 +369,8 @@ export function ReceivablesPage() {
     );
   }, [filteredTransactions]);
 
-  const allDebtorsForPdf = useMemo(() => {
-    const map = new Map<string, Transaction[]>();
-    for (const tx of filteredTransactions) {
-      const key = tx.debtorName ?? NO_DEBTOR_KEY;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(tx);
-    }
-    return new Map(
-      [...map.entries()].sort(
-        ([, a], [, b]) =>
-          b.reduce((s, t) => s + t.remainingAmount, 0) -
-          a.reduce((s, t) => s + t.remainingAmount, 0)
-      )
-    );
-  }, [filteredTransactions]);
+  // allDebtorsForPdf reutiliza o mesmo agrupamento já computado por groupedByPerson
+  const allDebtorsForPdf = groupedByPerson;
 
   const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));

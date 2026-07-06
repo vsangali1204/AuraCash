@@ -55,6 +55,7 @@ class CreateReceiptInput:
     receipt_date: date
     destination_account_id: strawberry.ID
     notes: Optional[str] = None
+    defer_remaining_to_date: Optional[date] = None  # data customizada para adiar o saldo restante
 
 
 @strawberry.input
@@ -82,9 +83,11 @@ class ReceivableQuery:
             receipt_status__in=["pending", "partial"],
         ).exclude(parent_transaction__isnull=True, total_installments__gt=1)
 
+        from django.db.models import Count
         txs = base_qs.values("debtor_name").annotate(
             total=Sum("amount"),
             received=Sum("received_amount"),
+            count=Count("id"),
         )
 
         return [
@@ -93,7 +96,7 @@ class ReceivableQuery:
                 total_amount=float(row["total"]),
                 received_amount=float(row["received"]),
                 pending_amount=float(row["total"] - row["received"]),
-                transaction_count=base_qs.filter(debtor_name=row["debtor_name"]).count(),
+                transaction_count=row["count"],
             )
             for row in txs
         ]
@@ -114,7 +117,7 @@ class ReceivableQuery:
             is_receivable=True,
             receipt_status__in=["pending", "partial"],
         ).exclude(parent_transaction__isnull=True, total_installments__gt=1).select_related(
-            "account", "credit_card", "invoice", "category"
+            "account", "credit_card", "invoice", "category", "recurrence"
         ).order_by("competence_date", "date")
 
         if debtor_name:
@@ -180,9 +183,10 @@ class ReceivableMutation:
             notes=input.notes,
         )
 
+        debtor_suffix = f" ({tx.debtor_name})" if tx.debtor_name else ""
         TransactionModel.objects.create(
             user=user,
-            description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
+            description=f"Recebimento: {tx.description}{debtor_suffix}",
             amount=amount,
             transaction_type="income",
             payment_method="pix",
@@ -195,8 +199,9 @@ class ReceivableMutation:
         leftover = remaining - amount  # positivo = ainda falta; negativo = pagamento a mais
 
         if leftover > Decimal("0"):
-            # Pagamento parcial: quita o original e cria novo recebível para daqui a 30 dias
-            defer_date = input.receipt_date + timedelta(days=30)
+            # Pagamento parcial: quita o original e cria novo recebível
+            # Usa a data informada pelo usuário ou fallback de 30 dias
+            defer_date = input.defer_remaining_to_date or (input.receipt_date + timedelta(days=30))
             TransactionModel.objects.create(
                 user=user,
                 description=tx.description,
@@ -282,7 +287,7 @@ class ReceivableMutation:
                 )
                 TransactionModel.objects.create(
                     user=user,
-                    description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
+                    description=f"Recebimento: {tx.description}" + (f" ({tx.debtor_name})" if tx.debtor_name else ""),
                     amount=prorated,
                     transaction_type="income",
                     payment_method="pix",
@@ -311,7 +316,7 @@ class ReceivableMutation:
                 )
                 TransactionModel.objects.create(
                     user=user,
-                    description=f"Recebimento: {tx.description} ({tx.debtor_name or ''})",
+                    description=f"Recebimento: {tx.description}" + (f" ({tx.debtor_name})" if tx.debtor_name else ""),
                     amount=remaining,
                     transaction_type="income",
                     payment_method="pix",

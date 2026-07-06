@@ -25,7 +25,10 @@ export function formatMonthYear(dateStr: string): string {
 }
 
 export function todayISO() {
-  return new Date().toISOString().split("T")[0];
+  // Usa a data local (não UTC) para evitar problemas com fusos negativos
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {

@@ -39,6 +39,12 @@ class CreditCardRefType:
     brand: str
 
 
+@strawberry.type
+class RecurrenceRefType:
+    id: strawberry.ID
+    description: str
+
+
 # ── Transaction type ──────────────────────────────────────────────────────────
 
 @strawberry.type
@@ -64,6 +70,7 @@ class TransactionType:
     remaining_amount: float
     is_partial_remainder: bool
     is_pending_recurrence: bool
+    recurrence: Optional[RecurrenceRefType]
     notes: Optional[str]
     created_at: datetime
 
@@ -94,6 +101,17 @@ def map_transaction(t: Transaction) -> TransactionType:
         except Exception as e:
             logger.warning("Falha ao carregar invoice para transaction %s: %s", t.id, e)
 
+    recurrence_ref = None
+    if t.recurrence_id:
+        try:
+            rec = t.recurrence
+            recurrence_ref = RecurrenceRefType(
+                id=strawberry.ID(str(rec.id)),
+                description=rec.description,
+            )
+        except Exception as e:
+            logger.warning("Falha ao carregar recurrence para transaction %s: %s", t.id, e)
+
     return TransactionType(
         id=strawberry.ID(str(t.id)),
         description=t.description,
@@ -116,6 +134,7 @@ def map_transaction(t: Transaction) -> TransactionType:
         remaining_amount=round(float(t.remaining_amount), 2),
         is_partial_remainder=t.is_partial_remainder,
         is_pending_recurrence=t.is_pending_recurrence,
+        recurrence=recurrence_ref,
         notes=t.notes,
         created_at=t.created_at,
     )
@@ -147,7 +166,7 @@ class DashboardSummary:
     month_net: float
     total_receivable: float
     month_receivable: float        # a receber com previsão para este mês
-    future_income_amount: float    # receitas ainda a entrar este mês (date > hoje)
+    future_income_amount: float    # receitas já lançadas ainda a entrar este mês (date > hoje)
     pending_invoices_amount: float # faturas com vencimento este mês, ainda não pagas
     future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
     recurrence_income_amount: float   # recorrências de receita do mês ainda não efetivadas
@@ -255,7 +274,7 @@ class TransactionQuery:
     ) -> list[TransactionType]:
         user = require_auth(info)
         qs = Transaction.objects.filter(user=user, parent_transaction__isnull=True).select_related(
-            "account", "transfer_account", "credit_card", "invoice", "category"
+            "account", "transfer_account", "credit_card", "invoice", "category", "recurrence"
         )
 
         if filters:
@@ -292,14 +311,14 @@ class TransactionQuery:
         qs = Transaction.objects.filter(
             invoice_id=invoice_id,
             credit_card__user=user,
-        ).select_related("account", "transfer_account", "credit_card", "invoice", "category")
+        ).select_related("account", "transfer_account", "credit_card", "invoice", "category", "recurrence")
         return [map_transaction(t) for t in qs]
 
     @strawberry.field
     def transaction(self, info: strawberry.types.Info, id: strawberry.ID) -> TransactionType:
         user = require_auth(info)
         t = Transaction.objects.filter(id=id, user=user).select_related(
-            "account", "transfer_account", "credit_card", "invoice", "category"
+            "account", "transfer_account", "credit_card", "invoice", "category", "recurrence"
         ).first()
         if not t:
             raise Exception("Lançamento não encontrado.")
@@ -322,12 +341,16 @@ class TransactionQuery:
         user = require_auth(info)
 
         # ── Saldo total: 2 queries ao invés de 4×N ───────────────────────────
+        # Considera só lançamentos até hoje: um lançamento com data futura ainda
+        # não aconteceu, então não deve reduzir o saldo atual — ele já é contado
+        # separadamente em future_income_amount/future_expenses_amount, mais abaixo.
+        today = timezone.localdate()
         accounts = list(Account.objects.filter(user=user, is_active=True))
         initial_sum = sum(float(a.initial_balance) for a in accounts)
         account_ids = [a.id for a in accounts]
 
         movements = (
-            Transaction.objects.filter(user=user, account_id__in=account_ids, is_pending_recurrence=False)
+            Transaction.objects.filter(user=user, account_id__in=account_ids, is_pending_recurrence=False, date__lte=today)
             .aggregate(
                 total_income=Coalesce(
                     Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
@@ -344,7 +367,8 @@ class TransactionQuery:
             )
         )
         transfer_in = Transaction.objects.filter(
-            user=user, transaction_type="transfer", transfer_account_id__in=account_ids, is_pending_recurrence=False
+            user=user, transaction_type="transfer", transfer_account_id__in=account_ids, is_pending_recurrence=False,
+            date__lte=today,
         ).aggregate(
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
         )["total"]
@@ -403,7 +427,6 @@ class TransactionQuery:
         # ── Projeção de caixa: receitas/despesas futuras e faturas pendentes ──
         from apps.credit_cards.models import Invoice as InvoiceModel
         from apps.recurrences.models import Recurrence
-        today = timezone.localdate()
 
         # Receitas ainda a entrar este mês: transações já lançadas com date > hoje
         future_income_amount = float(Transaction.objects.filter(
@@ -541,16 +564,17 @@ class TransactionQuery:
                 y -= 1
             target_months.append((y, m))
 
+        import calendar as _calendar
         first_y, first_m = target_months[0]
         last_y, last_m = target_months[-1]
         first_date = date(first_y, first_m, 1)
-        last_date = date(last_y, last_m, 28)  # inclui até final do mês
+        last_date = date(last_y, last_m, _calendar.monthrange(last_y, last_m)[1])
 
         raw = (
             Transaction.objects.filter(
                 user=user,
                 date__gte=first_date,
-                date__lte=date(last_y, last_m, 31) if last_m in (1,3,5,7,8,10,12) else date(last_y, last_m, 30),
+                date__lte=last_date,
                 transaction_type__in=["income", "expense"],
                 is_pending_recurrence=False,
             )

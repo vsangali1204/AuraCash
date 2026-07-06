@@ -91,9 +91,16 @@ export function TransactionsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [navMonth, setNavMonth] = useState(currentYearMonth);
   const descRef = useRef<HTMLInputElement | null>(null);
+
+  // Debounce da busca: espera 400ms após o último caractere antes de disparar a query
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { dateFrom, dateTo } = monthISORangeDates(navMonth.year, navMonth.month);
 
@@ -102,7 +109,7 @@ export function TransactionsPage() {
       filters: {
         dateFrom,
         dateTo,
-        ...(search ? { search } : {}),
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(typeFilter ? { transactionType: typeFilter } : {}),
       },
       limit: 200,

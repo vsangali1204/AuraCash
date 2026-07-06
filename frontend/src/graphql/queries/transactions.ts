@@ -16,6 +16,7 @@ const TRANSACTION_FIELDS = gql`
     receiptStatus
     receivedAmount
     remainingAmount
+    isPartialRemainder
     isPendingRecurrence
     installmentNumber
     totalInstallments
@@ -24,6 +25,10 @@ const TRANSACTION_FIELDS = gql`
       name
       color
       accountType
+    }
+    transferAccount {
+      id
+      name
     }
     creditCard {
       id
@@ -41,6 +46,10 @@ const TRANSACTION_FIELDS = gql`
       name
       color
       icon
+    }
+    recurrence {
+      id
+      description
     }
   }
 `;
