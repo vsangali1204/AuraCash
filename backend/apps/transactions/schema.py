@@ -169,9 +169,10 @@ class DashboardSummary:
     future_income_amount: float    # receitas já lançadas ainda a entrar este mês (date > hoje)
     pending_invoices_amount: float # faturas com vencimento este mês, ainda não pagas
     future_expenses_amount: float  # despesas não-cartão futuras este mês (date > hoje)
-    recurrence_income_amount: float   # recorrências de receita do mês ainda não efetivadas
-    recurrence_expenses_amount: float # recorrências de despesa do mês ainda não efetivadas (inclui cartão)
-    projected_balance: float       # total_balance + future_income + rec_income + receivable - invoices - future_expenses - rec_expenses
+    recurrence_income_amount: float   # recorrências de receita do mês ainda não efetivadas (sem cartão)
+    recurrence_expenses_amount: float # recorrências de despesa do mês ainda não efetivadas (sem cartão)
+    recurrence_credit_pending_amount: float # recorrências de cartão ainda não lançadas (não a receber)
+    projected_balance: float       # total_balance + future_income + rec_income + receivable - invoices - future_expenses - rec_expenses - rec_credit_pending
     pending_recurrences_count: int
     expense_by_category: list[CategoryExpense]
     income_by_category: list[CategoryExpense]
@@ -425,7 +426,7 @@ class TransactionQuery:
         month_receivable = float(month_recv_agg["total_amount"]) - float(month_recv_agg["total_received"])
 
         # ── Projeção de caixa: receitas/despesas futuras e faturas pendentes ──
-        from apps.credit_cards.models import Invoice as InvoiceModel
+        from apps.credit_cards.models import Invoice as InvoiceModel, get_first_invoice_month, get_or_create_invoice
         from apps.recurrences.models import Recurrence
 
         # Receitas ainda a entrar este mês: transações já lançadas com date > hoje
@@ -435,14 +436,12 @@ class TransactionQuery:
             is_pending_recurrence=False,
         ).aggregate(total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField()))["total"])
 
-        # Recorrências do mês ainda não efetivadas (label próprio na projeção):
-        # soma as que ainda não geraram lançamento no mês — independente de a
-        # data já ter passado — mais os lançamentos pendentes de confirmação.
-        # Cartão de crédito fica de fora: o gasto só sai da conta quando a
-        # fatura correspondente vence (que pode ser só no mês seguinte, a
-        # depender do fechamento do cartão), então ele já é representado em
-        # "Faturas de cartão" assim que a recorrência é processada — contar
-        # aqui também adiantaria a despesa para o mês errado.
+        # Recorrências do mês ainda não efetivadas, sem cartão (mostradas
+        # junto com "Boletos"): soma as que ainda não geraram lançamento no
+        # mês — independente de a data já ter passado — mais os lançamentos
+        # pendentes de confirmação. Cartão de crédito fica de fora daqui: tem
+        # tratamento próprio logo abaixo, porque o gasto só sai da conta
+        # quando a fatura vence (que pode ser só no mês seguinte).
         def _unprocessed_recurrences(rtype: str) -> Decimal:
             total = Decimal("0")
             for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type=rtype).exclude(payment_method="credit"):
@@ -486,6 +485,57 @@ class TransactionQuery:
         else:
             recurrence_income_amount = float(_unprocessed_recurrences("income") + pending_rec_agg["income"])
             recurrence_expenses_amount = float(_unprocessed_recurrences("expense") + pending_rec_agg["expense"])
+
+        # Recorrências de cartão ainda não lançadas ("Recorrências no crédito
+        # não lançadas"): o gasto só sai da conta quando a fatura correspondente
+        # vence, e isso pode cair no mês seguinte a depender do fechamento do
+        # cartão — por isso olhamos até 2 meses de execução para trás e
+        # projetamos pela fatura de destino, não pelo mês de execução. As que
+        # são "a receber" (assinatura dividida com alguém, ex.: Spotify+Netflix)
+        # entram na previsão de "a receber" do mês em que a fatura vai vencer,
+        # em vez de aqui — assim que processadas, a competence_date real
+        # (= vencimento da fatura) assume o lugar dessa previsão.
+        recurrence_credit_pending_amount = Decimal("0")
+        credit_receivable_preview = Decimal("0")
+        if not is_past_month:
+            def _recent_months(y: int, m: int, back: int = 2) -> list[tuple[int, int]]:
+                out = []
+                for i in range(back, -1, -1):
+                    mm, yy = m - i, y
+                    while mm <= 0:
+                        mm += 12
+                        yy -= 1
+                    out.append((yy, mm))
+                return out
+
+            credit_recs = Recurrence.objects.filter(
+                user=user, is_active=True, recurrence_type="expense",
+                payment_method="credit", credit_card__isnull=False,
+            ).select_related("credit_card")
+            for rec in credit_recs:
+                for check_year, check_month in _recent_months(year, month):
+                    exec_date = rec.get_execution_date(check_year, check_month)
+                    if not exec_date:
+                        continue
+                    if exec_date < rec.start_date:
+                        continue
+                    if rec.end_date is not None and exec_date > rec.end_date:
+                        continue
+                    already = Transaction.objects.filter(
+                        recurrence=rec, date__year=check_year, date__month=check_month
+                    ).exists()
+                    if already:
+                        continue
+                    invoice_ref_month = get_first_invoice_month(rec.credit_card, exec_date)
+                    invoice = get_or_create_invoice(rec.credit_card, invoice_ref_month)
+                    if invoice.due_date.year != year or invoice.due_date.month != month:
+                        continue
+                    if rec.is_receivable:
+                        credit_receivable_preview += rec.amount
+                    else:
+                        recurrence_credit_pending_amount += rec.amount
+
+        month_receivable += float(credit_receivable_preview)
 
         # Faturas com vencimento este mês ainda não pagas
         pending_invoices_qs = InvoiceModel.objects.filter(
@@ -625,9 +675,11 @@ class TransactionQuery:
             future_expenses_amount=future_expenses_amount,
             recurrence_income_amount=recurrence_income_amount,
             recurrence_expenses_amount=recurrence_expenses_amount,
+            recurrence_credit_pending_amount=float(recurrence_credit_pending_amount),
             projected_balance=(
                 total_balance + future_income_amount + recurrence_income_amount + month_receivable
                 - pending_invoices_amount - future_expenses_amount - recurrence_expenses_amount
+                - float(recurrence_credit_pending_amount)
             ),
             pending_recurrences_count=pending_recurrences_count,
             expense_by_category=expense_by_category,

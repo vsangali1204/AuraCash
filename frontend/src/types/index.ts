@@ -136,6 +136,7 @@ export interface DashboardSummary {
   futureExpensesAmount: number;
   recurrenceIncomeAmount: number;
   recurrenceExpensesAmount: number;
+  recurrenceCreditPendingAmount: number;
   projectedBalance: number;
   pendingRecurrencesCount: number;
   expenseByCategory: { categoryName: string; categoryColor: string; total: number; percentage: number }[];

@@ -94,7 +94,7 @@ export function DashboardPage() {
   const totalReceivable = roundMoney(receivables.reduce((s, r) => roundMoney(s + r.pendingAmount), 0));
 
   const projectedIn = (summary?.futureIncomeAmount ?? 0) + (summary?.monthReceivable ?? 0) + (summary?.recurrenceIncomeAmount ?? 0);
-  const projectedOut = (summary?.pendingInvoicesAmount ?? 0) + (summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0);
+  const projectedOut = (summary?.pendingInvoicesAmount ?? 0) + (summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0) + (summary?.recurrenceCreditPendingAmount ?? 0);
 
   const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
     .toLocaleString("pt-BR", { month: "long", year: "numeric" });
@@ -247,15 +247,15 @@ export function DashboardPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />Boletos / débitos agendados
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400" />Boletos
                   </span>
-                  <span className="text-sm font-medium text-red-400">− {formatCurrency(summary?.futureExpensesAmount ?? 0)}</span>
+                  <span className="text-sm font-medium text-red-400">− {formatCurrency((summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0))}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />Recorrências (contas fixas)
+                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />Recorrências no crédito não lançadas
                   </span>
-                  <span className="text-sm font-medium text-violet-400">− {formatCurrency(summary?.recurrenceExpensesAmount ?? 0)}</span>
+                  <span className="text-sm font-medium text-violet-400">− {formatCurrency(summary?.recurrenceCreditPendingAmount ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t border-surface-border/60 pt-2 mt-1">
                   <span className="text-xs font-semibold text-gray-400">Total de saídas</span>

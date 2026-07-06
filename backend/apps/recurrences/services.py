@@ -40,6 +40,12 @@ def create_transaction_for_recurrence(rec, exec_date: date):
         kwargs["invoice"] = invoice
         kwargs["installment_number"] = 1
         kwargs["total_installments"] = 1
+        # A receber de compra no cartão só faz sentido cobrar quando a fatura
+        # vence (mesma regra usada na criação manual de lançamento no cartão).
+        if rec.is_receivable:
+            kwargs["competence_date"] = invoice.due_date
+    elif rec.is_receivable:
+        kwargs["competence_date"] = exec_date
 
     return Transaction.objects.create(**kwargs, is_pending_recurrence=not rec.automatic)
 
