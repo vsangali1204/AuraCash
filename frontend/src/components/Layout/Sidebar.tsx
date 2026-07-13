@@ -12,6 +12,7 @@ import {
   Users,
   Calendar,
   BarChart2,
+  Calculator,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -47,6 +48,12 @@ const navGroups = [
       { to: "/receivables", icon: Users, label: "A Receber" },
       { to: "/calendar", icon: Calendar, label: "Calendário" },
       { to: "/reports", icon: BarChart2, label: "Relatórios" },
+    ],
+  },
+  {
+    label: "Ferramentas",
+    items: [
+      { to: "/simulator", icon: Calculator, label: "Simulador" },
     ],
   },
 ];

@@ -31,6 +31,17 @@ export function todayISO() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Soma N meses a uma data ISO (YYYY-MM-DD), preservando o dia (com clamp no último dia do mês de destino). */
+export function addMonths(dateStr: string, months: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const total = m - 1 + months;
+  const year = y + Math.floor(total / 12);
+  const month = ((total % 12) + 12) % 12;
+  const maxDay = new Date(year, month + 1, 0).getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${pad(month + 1)}-${pad(Math.min(d, maxDay))}`;
+}
+
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   checking: "Conta Corrente",
   savings: "Poupança",

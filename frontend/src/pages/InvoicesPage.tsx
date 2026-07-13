@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { InvoiceTimeline } from "@/components/charts/InvoiceTimeline";
 import {
   CREDIT_CARDS_QUERY,
   ALL_INVOICES_QUERY,
@@ -112,7 +113,7 @@ export function InvoicesPage() {
   const invoiceMonths = useMemo(() =>
     [...cardInvoices]
       .sort((a, b) => a.referenceMonth.localeCompare(b.referenceMonth))
-      .map((inv) => ({ ym: inv.referenceMonth.slice(0, 7), status: inv.status })),
+      .map((inv) => ({ ym: inv.referenceMonth.slice(0, 7), status: inv.status, totalAmount: inv.totalAmount })),
     [cardInvoices]
   );
 
@@ -473,31 +474,13 @@ export function InvoicesPage() {
             </p>
           </div>
 
-          {/* Chips de mês — histórico de faturas */}
+          {/* Timeline de faturas — histórico com linha e valores */}
           {invoiceMonths.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {invoiceMonths.map(({ ym, status }) => {
-                const isSelected = selectedMonthYM === ym;
-                const cfg = statusConfig(status);
-                return (
-                  <button
-                    key={ym}
-                    onClick={() => setNavMonth(parseMonthYM(ym))}
-                    className={cn(
-                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all capitalize",
-                      isSelected
-                        ? "border-sky-500/40 bg-sky-500/15 text-white"
-                        : "border-surface-border bg-surface-card text-gray-400 hover:border-sky-500/20 hover:text-white"
-                    )}
-                  >
-                    {!isSelected && (
-                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", cfg.dot)} />
-                    )}
-                    {formatMonthYear(ym)}
-                  </button>
-                );
-              })}
-            </div>
+            <InvoiceTimeline
+              months={invoiceMonths}
+              selectedYm={selectedMonthYM}
+              onSelect={(ym) => setNavMonth(parseMonthYM(ym))}
+            />
           )}
 
           {/* Resumo da fatura */}

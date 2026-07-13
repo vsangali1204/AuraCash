@@ -22,6 +22,7 @@ const RecurrencesPage = lazy(() => import("@/pages/RecurrencesPage").then(m => (
 const ReceivablesPage = lazy(() => import("@/pages/ReceivablesPage").then(m => ({ default: m.ReceivablesPage })));
 const CalendarPage    = lazy(() => import("@/pages/CalendarPage").then(m => ({ default: m.CalendarPage })));
 const ReportsPage     = lazy(() => import("@/pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const SimulatorPage   = lazy(() => import("@/pages/SimulatorPage").then(m => ({ default: m.SimulatorPage })));
 const NotFoundPage    = lazy(() => import("@/pages/NotFoundPage").then(m => ({ default: m.NotFoundPage })));
 
 function PageLoader() {
@@ -94,6 +95,7 @@ export default function App() {
               <Route path="/receivables"  element={<ReceivablesPage />} />
               <Route path="/calendar"     element={<CalendarPage />} />
               <Route path="/reports"      element={<ReportsPage />} />
+              <Route path="/simulator"    element={<SimulatorPage />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
