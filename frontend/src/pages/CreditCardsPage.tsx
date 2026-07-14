@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-// Badge available for future use
+import { InvoiceStatusBadge } from "@/components/ui/InvoiceStatusBadge";
 import {
   CREDIT_CARDS_QUERY, INVOICES_QUERY,
   CREATE_CREDIT_CARD_MUTATION, UPDATE_CREDIT_CARD_MUTATION,
@@ -21,7 +21,7 @@ import { INVOICE_TRANSACTIONS_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
   formatCurrency, formatDate, formatMonthYear,
-  CREDIT_CARD_BRAND_LABELS, INVOICE_STATUS_LABELS, invoiceStatusColor, todayISO,
+  CREDIT_CARD_BRAND_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, CreditCard, Invoice, Transaction } from "@/types";
 
@@ -168,36 +168,36 @@ export function CreditCardsPage() {
               <Card key={card.id} padding="none" className="overflow-hidden">
                 {/* Card header */}
                 <div className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-600/20">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-600/20">
                         <CardIcon size={20} className="text-sky-400" />
                       </div>
-                      <div>
-                        <p className="font-semibold text-white">{card.name}</p>
-                        <p className="text-xs text-gray-500">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-white">{card.name}</p>
+                        <p className="truncate text-xs text-gray-500">
                           {CREDIT_CARD_BRAND_LABELS[card.brand]} · Fecha dia {card.closingDay} · Vence dia {card.dueDay}
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => openEdit(card)} className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"><Pencil size={14} /></button>
-                      <button onClick={() => setDeleteId(card.id)} className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                    <div className="flex shrink-0 gap-1">
+                      <button onClick={() => openEdit(card)} aria-label={`Editar ${card.name}`} className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"><Pencil size={14} /></button>
+                      <button onClick={() => setDeleteId(card.id)} aria-label={`Excluir ${card.name}`} className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                     </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-4">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-500">Limite total</p>
-                      <p className="text-sm font-semibold text-white">{formatCurrency(card.totalLimit)}</p>
+                      <p className="truncate text-[13px] font-semibold tabular-nums text-white sm:text-sm">{formatCurrency(card.totalLimit)}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-500">Disponível</p>
-                      <p className="text-sm font-semibold text-emerald-400">{formatCurrency(card.availableLimit)}</p>
+                      <p className="truncate text-[13px] font-semibold tabular-nums text-emerald-400 sm:text-sm">{formatCurrency(card.availableLimit)}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-gray-500">Utilizado</p>
-                      <p className="text-sm font-semibold text-amber-400">{formatCurrency(card.totalLimit - card.availableLimit)}</p>
+                      <p className="truncate text-[13px] font-semibold tabular-nums text-amber-400 sm:text-sm">{formatCurrency(card.totalLimit - card.availableLimit)}</p>
                     </div>
                   </div>
 
@@ -212,12 +212,10 @@ export function CreditCardsPage() {
                     <div className="mt-3 flex items-center justify-between rounded-lg border border-surface-border bg-surface p-3">
                       <div>
                         <p className="text-xs text-gray-500">Fatura atual ({formatMonthYear(card.currentInvoice.referenceMonth)})</p>
-                        <p className="text-sm font-semibold text-white">{formatCurrency(card.currentInvoice.totalAmount)}</p>
+                        <p className="text-sm font-semibold tabular-nums text-white">{formatCurrency(card.currentInvoice.totalAmount)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium ${invoiceStatusColor(card.currentInvoice.status)}`}>
-                          {INVOICE_STATUS_LABELS[card.currentInvoice.status]}
-                        </span>
+                        <InvoiceStatusBadge status={card.currentInvoice.status} />
                         {card.currentInvoice.status !== "paid" && (
                           <Button
                             size="sm"
@@ -268,7 +266,7 @@ export function CreditCardsPage() {
       )}
 
       {/* Card create/edit modal */}
-      <Modal open={modalOpen} onClose={closeCardModal} title={editing ? "Editar cartão" : "Novo cartão"}>
+      <Modal open={modalOpen} onClose={closeCardModal} title={editing ? "Editar cartão" : "Novo cartão"} closeOnBackdropClick={!cardForm.formState.isDirty}>
         <form onSubmit={cardForm.handleSubmit(onCardSubmit)} className="space-y-4">
           <Input label="Nome do cartão" placeholder="Ex: Nubank Mastercard" error={cardForm.formState.errors.name?.message} {...cardForm.register("name")} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -310,8 +308,11 @@ export function CreditCardsPage() {
       </Modal>
 
       {/* Delete modal */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir cartão" size="sm">
-        <p className="text-sm text-gray-400">Tem certeza? Todas as faturas e lançamentos serão removidos.</p>
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir cartão" size="sm" closeOnBackdropClick={false}>
+        <p className="text-sm text-gray-400">
+          Tem certeza?{" "}
+          <span className="font-semibold text-red-400">Todas as faturas e lançamentos deste cartão serão apagados permanentemente — essa ação não pode ser desfeita.</span>
+        </p>
         <div className="mt-4 flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancelar</Button>
           <Button variant="danger" loading={deleting} onClick={() => deleteId && deleteCard({ variables: { id: deleteId } })}>Excluir</Button>
@@ -323,7 +324,7 @@ export function CreditCardsPage() {
 
 function InvoiceRow({ invoice, onPay }: { invoice: Invoice; accountOptions?: {value: string; label: string}[]; onPay: (inv: Invoice) => void }) {
   const [showTx, setShowTx] = useState(false);
-  const { data } = useQuery<{ invoiceTransactions: Transaction[] }>(INVOICE_TRANSACTIONS_QUERY, {
+  const { data, loading } = useQuery<{ invoiceTransactions: Transaction[] }>(INVOICE_TRANSACTIONS_QUERY, {
     variables: { invoiceId: invoice.id },
     skip: !showTx,
   });
@@ -338,25 +339,34 @@ function InvoiceRow({ invoice, onPay }: { invoice: Invoice; accountOptions?: {va
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <p className="text-sm font-semibold text-white">{formatCurrency(invoice.totalAmount)}</p>
-            <span className={`text-xs font-medium ${invoiceStatusColor(invoice.status)}`}>{INVOICE_STATUS_LABELS[invoice.status]}</span>
+            <p className="text-sm font-semibold tabular-nums text-white">{formatCurrency(invoice.totalAmount)}</p>
+            <InvoiceStatusBadge status={invoice.status} />
           </div>
           {invoice.status !== "paid" && (
-            <Button size="sm" variant="secondary" onClick={() => onPay(invoice)}><DollarSign size={12} /></Button>
+            <Button size="sm" variant="secondary" aria-label="Pagar fatura" onClick={() => onPay(invoice)}><DollarSign size={12} /></Button>
           )}
-          <button onClick={() => setShowTx(v => !v)} className="rounded p-1 text-gray-500 hover:text-white">
+          <button
+            onClick={() => setShowTx((v) => !v)}
+            aria-label={showTx ? "Ocultar lançamentos" : "Ver lançamentos"}
+            aria-expanded={showTx}
+            className="rounded p-1.5 text-gray-500 hover:text-white"
+          >
             {showTx ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         </div>
       </div>
       {showTx && (
         <div className="border-t border-surface-border px-3 pb-3 pt-2 space-y-1">
-          {txs.length === 0 ? (
+          {loading ? (
+            <div className="space-y-1.5 py-1">
+              {[...Array(2)].map((_, i) => <div key={i} className="h-4 animate-pulse rounded bg-surface-hover" />)}
+            </div>
+          ) : txs.length === 0 ? (
             <p className="text-xs text-gray-500">Nenhum lançamento.</p>
           ) : txs.map((t) => (
             <div key={t.id} className="flex items-center justify-between text-xs py-1">
               <span className="text-gray-400">{t.description}</span>
-              <span className="text-red-400 font-medium">{formatCurrency(t.amount)}</span>
+              <span className="font-medium tabular-nums text-red-400">{formatCurrency(t.amount)}</span>
             </div>
           ))}
         </div>

@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, DollarSign, CreditCard,
-  ChevronLeft, ChevronRight, BarChart2,
+  ChevronLeft, ChevronRight, BarChart2, AlertCircle,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
@@ -50,19 +50,21 @@ export function ReportsPage() {
     else setMonth(m => m + 1);
   }
 
-  const { data: summaryData, loading: summaryLoading } = useQuery<{ dashboardSummary: DashboardSummary }>(
+  const { data: summaryData, loading: summaryLoading, error: summaryError } = useQuery<{ dashboardSummary: DashboardSummary }>(
     DASHBOARD_SUMMARY_QUERY, { variables: { year, month } }
   );
 
-  const { data: cardsData } = useQuery<{ creditCards: CreditCardType[] }>(CREDIT_CARDS_QUERY);
-  const { data: invoicesData } = useQuery<{ invoices: Invoice[] }>(INVOICES_QUERY, {
+  const { data: cardsData, error: cardsError } = useQuery<{ creditCards: CreditCardType[] }>(CREDIT_CARDS_QUERY);
+  const { data: invoicesData, error: invoicesError } = useQuery<{ invoices: Invoice[] }>(INVOICES_QUERY, {
     variables: { creditCardId: selectedCardId },
     skip: !selectedCardId,
   });
-  const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
-  const { data: paymentMethodData } = useQuery<{ paymentMethodSummary: PaymentMethodSummary[] }>(
+  const { data: receivablesData, error: receivablesError } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
+  const { data: paymentMethodData, error: paymentMethodError } = useQuery<{ paymentMethodSummary: PaymentMethodSummary[] }>(
     PAYMENT_METHOD_SUMMARY_QUERY, { variables: { year, month } }
   );
+
+  const hasError = !!(summaryError || cardsError || invoicesError || receivablesError || paymentMethodError);
 
   const summary = summaryData?.dashboardSummary;
   const cards = cardsData?.creditCards ?? [];
@@ -151,6 +153,13 @@ export function ReportsPage() {
         </div>
       </div>
 
+      {hasError && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <AlertCircle size={16} className="shrink-0" />
+          Não foi possível carregar todos os dados dos relatórios. Alguns gráficos podem estar incompletos — tente recarregar a página.
+        </div>
+      )}
+
       {/* Summary stat cards */}
       {summaryLoading ? (
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
@@ -194,7 +203,9 @@ export function ReportsPage() {
         {/* Balance history area chart */}
         <Card>
           <h3 className="mb-4 text-sm font-semibold text-white">Receitas vs Despesas (6 meses)</h3>
-          {balanceHistory.length === 0 ? (
+          {summaryLoading ? (
+            <ChartSkeleton />
+          ) : balanceHistory.length === 0 ? (
             <EmptyChart />
           ) : (
             <ResponsiveContainer width="100%" height={220}>
@@ -225,7 +236,9 @@ export function ReportsPage() {
         {/* Net balance area chart */}
         <Card>
           <h3 className="mb-4 text-sm font-semibold text-white">Resultado líquido acumulado</h3>
-          {balanceHistory.length === 0 ? (
+          {summaryLoading ? (
+            <ChartSkeleton />
+          ) : balanceHistory.length === 0 ? (
             <EmptyChart />
           ) : (
             <ResponsiveContainer width="100%" height={220}>
@@ -272,7 +285,9 @@ export function ReportsPage() {
           <h3 className="mb-4 text-sm font-semibold text-white">
             Despesas por categoria — {MONTHS_LABEL[month - 1]}/{year}
           </h3>
-          {expenseByCategory.length === 0 ? (
+          {summaryLoading ? (
+            <ChartSkeleton height={180} />
+          ) : expenseByCategory.length === 0 ? (
             <EmptyChart message="Sem despesas com categoria neste mês." />
           ) : (
             <CategoryPieChart data={expenseByCategory} />
@@ -284,7 +299,9 @@ export function ReportsPage() {
           <h3 className="mb-4 text-sm font-semibold text-white">
             Receitas por categoria — {MONTHS_LABEL[month - 1]}/{year}
           </h3>
-          {incomeByCategory.length === 0 ? (
+          {summaryLoading ? (
+            <ChartSkeleton height={180} />
+          ) : incomeByCategory.length === 0 ? (
             <EmptyChart message="Sem receitas com categoria neste mês." />
           ) : (
             <CategoryPieChart data={incomeByCategory} />
@@ -293,11 +310,15 @@ export function ReportsPage() {
       </div>
 
       {/* Payment method distribution */}
-      {paymentMethods.length > 0 && (
-        <Card>
-          <h3 className="mb-4 text-sm font-semibold text-white">
-            Despesas por meio de pagamento — {MONTHS_LABEL[month - 1]}/{year}
-          </h3>
+      <Card>
+        <h3 className="mb-4 text-sm font-semibold text-white">
+          Despesas por meio de pagamento — {MONTHS_LABEL[month - 1]}/{year}
+        </h3>
+        {summaryLoading ? (
+          <ChartSkeleton height={160} />
+        ) : paymentMethods.length === 0 ? (
+          <EmptyChart message="Sem despesas neste mês." />
+        ) : (
           <div className="flex flex-col gap-6 sm:flex-row">
             <div className="flex justify-center sm:w-48">
               <ResponsiveContainer width={160} height={160}>
@@ -339,8 +360,8 @@ export function ReportsPage() {
               ))}
             </div>
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Receivables + monthly breakdown */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -387,7 +408,9 @@ export function ReportsPage() {
         {/* Monthly summary table */}
         <Card>
           <h3 className="mb-4 text-sm font-semibold text-white">Resumo mensal (6 meses)</h3>
-          {balanceHistory.length === 0 ? (
+          {summaryLoading ? (
+            <ChartSkeleton />
+          ) : balanceHistory.length === 0 ? (
             <EmptyChart />
           ) : (
             <div className="overflow-x-auto">
@@ -441,10 +464,10 @@ export function ReportsPage() {
       </div>
 
       {/* Credit card invoices */}
-      {cards.length > 0 && (
-        <Card>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-sm font-semibold text-white">Histórico de faturas por cartão</h3>
+      <Card>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-white">Histórico de faturas por cartão</h3>
+          {cards.length > 0 && (
             <select
               value={selectedCardId}
               onChange={(e) => setSelectedCardId(e.target.value)}
@@ -455,9 +478,12 @@ export function ReportsPage() {
                 <option key={c.id} value={c.id}>{c.name} ({c.brand})</option>
               ))}
             </select>
-          </div>
+          )}
+        </div>
 
-          {!selectedCardId ? (
+        {cards.length === 0 ? (
+          <EmptyChart message="Nenhum cartão de crédito cadastrado." />
+        ) : !selectedCardId ? (
             <p className="py-8 text-center text-sm text-gray-500">Selecione um cartão para ver o histórico de faturas.</p>
           ) : invoices.length === 0 ? (
             <p className="py-8 text-center text-sm text-gray-500">Nenhuma fatura encontrada.</p>
@@ -498,7 +524,7 @@ export function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-border">
-                    {[...invoices].reverse().slice(0, 6).map((inv) => (
+                    {[...invoices].reverse().slice(0, 12).map((inv) => (
                       <tr key={inv.id} className="hover:bg-surface-hover">
                         <td className="py-2 text-gray-300">{formatMonthYear(inv.referenceMonth)}</td>
                         <td className="py-2 text-right text-gray-400">{inv.dueDate ? new Date(inv.dueDate + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</td>
@@ -514,8 +540,7 @@ export function ReportsPage() {
               </div>
             </>
           )}
-        </Card>
-      )}
+      </Card>
     </div>
   );
 }
@@ -566,6 +591,10 @@ function EmptyChart({ message = "Sem dados suficientes." }: { message?: string }
       <p className="text-sm text-gray-500">{message}</p>
     </div>
   );
+}
+
+function ChartSkeleton({ height = 220 }: { height?: number }) {
+  return <div className="animate-pulse rounded-lg bg-surface-hover" style={{ height }} />;
 }
 
 function CategoryPieChart({ data }: { data: { categoryName: string; categoryColor: string; total: number; percentage: number }[] }) {

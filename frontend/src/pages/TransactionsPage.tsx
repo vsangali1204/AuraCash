@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@apollo/client";
 import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
@@ -87,6 +88,8 @@ function monthISORangeDates(year: number, month: number) {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function TransactionsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -138,7 +141,7 @@ export function TransactionsPage() {
 
   const {
     register, handleSubmit, reset, watch, setValue,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -220,6 +223,14 @@ export function TransactionsPage() {
     // foca na descrição após animação
     setTimeout(() => descRef.current?.focus(), 100);
   }
+
+  // Acesso rápido "+" da Navbar/BottomNav: abre o modal de criação já ao chegar na página
+  useEffect(() => {
+    if ((location.state as { openCreate?: boolean } | null)?.openCreate) {
+      openCreate();
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openEdit(t: Transaction) {
     setEditing(t);
@@ -536,7 +547,7 @@ export function TransactionsPage() {
       )}
 
       {/* Modal de criação/edição */}
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar lançamento" : "Novo lançamento"} size="lg">
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar lançamento" : "Novo lançamento"} size="lg" closeOnBackdropClick={!isDirty}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
           {/* Aviso para parcelados */}

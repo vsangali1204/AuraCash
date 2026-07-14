@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { InvoiceTimeline } from "@/components/charts/InvoiceTimeline";
+import { InvoiceStatusBadge } from "@/components/ui/InvoiceStatusBadge";
 import {
   CREDIT_CARDS_QUERY,
   ALL_INVOICES_QUERY,
@@ -35,7 +36,6 @@ import {
   formatDate,
   formatMonthYear,
   CREDIT_CARD_BRAND_LABELS,
-  INVOICE_STATUS_LABELS,
   todayISO,
 } from "@/lib/utils";
 import type { Account, CreditCard, Invoice, InvoiceWithCard, Transaction } from "@/types";
@@ -56,26 +56,7 @@ function parseMonthYM(ym: string): { year: number; month: number } {
   return { year: Number(parts[0]), month: Number(parts[1]) };
 }
 
-function statusConfig(status: string) {
-  return (
-    {
-      open:    { bg: "bg-blue-500/12 text-blue-400",    dot: "bg-blue-400" },
-      closed:  { bg: "bg-amber-500/12 text-amber-400",  dot: "bg-amber-400" },
-      partial: { bg: "bg-orange-500/12 text-orange-400", dot: "bg-orange-400" },
-      paid:    { bg: "bg-emerald-500/12 text-emerald-400", dot: "bg-emerald-400" },
-    }[status] ?? { bg: "bg-gray-500/12 text-gray-400", dot: "bg-gray-400" }
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = statusConfig(status);
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.bg)}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", cfg.dot)} />
-      {INVOICE_STATUS_LABELS[status] ?? status}
-    </span>
-  );
-}
+const StatusBadge = InvoiceStatusBadge;
 
 export function InvoicesPage() {
   const now = new Date();

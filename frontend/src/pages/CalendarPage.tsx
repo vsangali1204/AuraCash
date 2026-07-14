@@ -25,7 +25,7 @@ export function CalendarPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const { data, loading } = useQuery<{ calendarEvents: CalendarEvent[] }>(CALENDAR_EVENTS_QUERY, {
+  const { data, loading, error } = useQuery<{ calendarEvents: CalendarEvent[] }>(CALENDAR_EVENTS_QUERY, {
     variables: { year, month },
   });
 
@@ -99,6 +99,8 @@ export function CalendarPage() {
           {/* Days grid */}
           {loading ? (
             <div className="h-64 animate-pulse rounded-lg bg-surface-border" />
+          ) : error ? (
+            <p className="py-12 text-center text-sm text-red-400">Erro ao carregar eventos. Tente recarregar a página.</p>
           ) : (
             <div className="grid grid-cols-7 gap-1">
               {cells.map((day, idx) => {
@@ -113,6 +115,7 @@ export function CalendarPage() {
                   <button
                     key={idx}
                     onClick={() => setSelectedDate(isSelected ? null : dayStr)}
+                    aria-label={`Dia ${day}${dayEvents.length > 0 ? `, ${dayEvents.length} evento${dayEvents.length !== 1 ? "s" : ""}` : ""}`}
                     className={`relative flex min-h-[48px] sm:min-h-[60px] flex-col items-center rounded-lg p-1 sm:p-1.5 text-xs transition-colors ${
                       isSelected
                         ? "bg-sky-600/20 border border-sky-500/50"
@@ -125,7 +128,7 @@ export function CalendarPage() {
                     {dayEvents.length > 0 && (
                       <div className="mt-1 flex flex-wrap justify-center gap-0.5">
                         {dayEvents.slice(0, 3).map((e, i) => (
-                          <div key={i} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: e.color }} />
+                          <div key={i} title={e.title} className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: e.color }} />
                         ))}
                         {dayEvents.length > 3 && (
                           <span className="text-gray-500 text-[10px]">+{dayEvents.length - 3}</span>
@@ -178,7 +181,8 @@ export function CalendarPage() {
                   </div>
                 </div>
               ))}
-              {events.length === 0 && !loading && (
+              {error && <p className="text-sm text-red-400">Erro ao carregar eventos.</p>}
+              {events.length === 0 && !loading && !error && (
                 <p className="text-sm text-gray-500">Nenhum evento este mês.</p>
               )}
             </div>

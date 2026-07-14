@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { REGISTER_MUTATION } from "@/graphql/queries/auth";
 import { useAuthStore } from "@/store/authStore";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -26,12 +27,13 @@ type FormData = z.infer<typeof schema>;
 export function RegisterPage() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({ resolver: zodResolver(schema), mode: "onBlur" });
 
   const [registerMutation, { loading }] = useMutation(REGISTER_MUTATION, {
     onCompleted: (data) => {
@@ -41,11 +43,14 @@ export function RegisterPage() {
       navigate("/");
     },
     onError: (error) => {
-      toast.error(error.message || "Erro ao criar conta");
+      const message = error.message || "Erro ao criar conta";
+      setFormError(message);
+      toast.error(message);
     },
   });
 
   const onSubmit = ({ name, email, password }: FormData) => {
+    setFormError(null);
     registerMutation({ variables: { input: { name, email, password } } });
   };
 
@@ -70,6 +75,7 @@ export function RegisterPage() {
             label="Nome"
             placeholder="Seu nome"
             autoComplete="name"
+            autoFocus
             error={errors.name?.message}
             {...register("name")}
           />
@@ -84,8 +90,9 @@ export function RegisterPage() {
           <Input
             label="Senha"
             type="password"
-            placeholder="Mínimo 8 caracteres"
+            placeholder="••••••••"
             autoComplete="new-password"
+            hint="Mínimo 8 caracteres"
             error={errors.password?.message}
             {...register("password")}
           />
@@ -97,6 +104,8 @@ export function RegisterPage() {
             error={errors.confirmPassword?.message}
             {...register("confirmPassword")}
           />
+
+          {formError && <p className="text-sm text-red-400">{formError}</p>}
 
           <Button type="submit" className="w-full" loading={loading} size="lg">
             Criar conta

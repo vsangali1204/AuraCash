@@ -28,19 +28,25 @@ export function ResetPasswordPage() {
   const token = searchParams.get("token") ?? "";
 
   const [done, setDone] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) });
+  } = useForm<FormData>({ resolver: zodResolver(schema), mode: "onBlur" });
 
   const [resetPassword, { loading }] = useMutation(RESET_PASSWORD_MUTATION, {
     onCompleted: () => setDone(true),
-    onError: (error) => toast.error(error.message || "Link inválido ou expirado"),
+    onError: (error) => {
+      const message = error.message || "Link inválido ou expirado";
+      setFormError(message);
+      toast.error(message);
+    },
   });
 
   const onSubmit = (data: FormData) => {
+    setFormError(null);
     resetPassword({ variables: { uid, token, newPassword: data.newPassword } });
   };
 
@@ -101,6 +107,7 @@ export function ResetPasswordPage() {
                 label="Nova senha"
                 type="password"
                 placeholder="••••••••"
+                autoFocus
                 error={errors.newPassword?.message}
                 {...register("newPassword")}
               />
@@ -111,6 +118,8 @@ export function ResetPasswordPage() {
                 error={errors.confirmPassword?.message}
                 {...register("confirmPassword")}
               />
+
+              {formError && <p className="text-sm text-red-400">{formError}</p>}
 
               <Button type="submit" className="w-full" loading={loading} size="lg">
                 Redefinir senha

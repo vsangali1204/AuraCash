@@ -139,6 +139,8 @@ function SidebarContent({
         <div className="shrink-0 border-t border-surface-border p-2">
           <button
             onClick={onToggle}
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            aria-expanded={!collapsed}
             className="flex w-full items-center justify-center rounded-lg p-2 text-gray-600 hover:bg-white/[0.04] hover:text-gray-400 transition-colors"
           >
             {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
@@ -172,6 +174,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           <aside className="relative flex h-full w-64 flex-col border-r border-surface-border bg-surface-card">
             <button
               onClick={onMobileClose}
+              aria-label="Fechar menu"
               className="absolute right-3 top-3.5 rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.05] hover:text-gray-300 transition-colors"
             >
               <X size={17} />

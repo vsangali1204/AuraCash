@@ -17,7 +17,7 @@ import {
   UPDATE_ACCOUNT_MUTATION,
   DELETE_ACCOUNT_MUTATION,
 } from "@/graphql/queries/accounts";
-import { formatCurrency, ACCOUNT_TYPE_LABELS } from "@/lib/utils";
+import { cn, formatCurrency, ACCOUNT_TYPE_LABELS } from "@/lib/utils";
 import type { Account } from "@/types";
 
 const schema = z.object({
@@ -54,7 +54,7 @@ export function AccountsPage() {
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { accountType: "checking", color: "#0ea5e9", initialBalance: 0 },
@@ -120,7 +120,7 @@ export function AccountsPage() {
           <h1 className="text-xl font-semibold text-white">Contas Bancárias</h1>
           <p className="text-sm text-gray-500">
             Saldo total:{" "}
-            <span className={totalBalance >= 0 ? "text-emerald-400" : "text-red-400"}>
+            <span className={cn("tabular-nums", totalBalance >= 0 ? "text-emerald-400" : "text-red-400")}>
               {formatCurrency(totalBalance)}
             </span>
           </p>
@@ -153,22 +153,24 @@ export function AccountsPage() {
                 style={{ backgroundColor: account.color }}
               />
               <div className="pl-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-white">{account.name}</p>
-                    <p className="text-xs text-gray-500">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-white">{account.name}</p>
+                    <p className="truncate text-xs text-gray-500">
                       {account.bank || ACCOUNT_TYPE_LABELS[account.accountType]}
                     </p>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-1">
                     <button
                       onClick={() => openEdit(account)}
+                      aria-label={`Editar ${account.name}`}
                       className="rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={() => setDeleteId(account.id)}
+                      aria-label={`Excluir ${account.name}`}
                       className="rounded-lg p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
                     >
                       <Trash2 size={14} />
@@ -178,14 +180,15 @@ export function AccountsPage() {
                 <div className="mt-4">
                   <p className="text-xs text-gray-500">Saldo atual</p>
                   <p
-                    className={`text-2xl font-bold ${
+                    className={cn(
+                      "text-2xl font-bold tabular-nums",
                       account.currentBalance >= 0 ? "text-emerald-400" : "text-red-400"
-                    }`}
+                    )}
                   >
                     {formatCurrency(account.currentBalance)}
                   </p>
                   {account.initialBalance !== 0 && (
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs tabular-nums text-gray-600">
                       Inicial: {formatCurrency(account.initialBalance)}
                     </p>
                   )}
@@ -201,6 +204,7 @@ export function AccountsPage() {
         open={modalOpen}
         onClose={closeModal}
         title={editing ? "Editar conta" : "Nova conta"}
+        closeOnBackdropClick={!isDirty}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input label="Nome da conta" placeholder="Ex: Nubank, BB Corrente" error={errors.name?.message} {...register("name")} />
@@ -226,7 +230,9 @@ export function AccountsPage() {
                   key={color}
                   type="button"
                   onClick={() => setValue("color", color)}
-                  className="h-7 w-7 rounded-full transition-transform hover:scale-110"
+                  aria-label={`Cor ${color}`}
+                  aria-pressed={selectedColor === color}
+                  className="h-9 w-9 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-surface"
                   style={{
                     backgroundColor: color,
                     outline: selectedColor === color ? `2px solid ${color}` : "none",
@@ -248,9 +254,10 @@ export function AccountsPage() {
       </Modal>
 
       {/* Delete confirmation modal */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir conta" size="sm">
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir conta" size="sm" closeOnBackdropClick={false}>
         <p className="text-sm text-gray-400">
-          Tem certeza que deseja excluir esta conta? Todos os lançamentos vinculados serão removidos.
+          Tem certeza que deseja excluir esta conta?{" "}
+          <span className="font-semibold text-red-400">Todos os lançamentos vinculados a ela serão apagados permanentemente — essa ação não pode ser desfeita.</span>
         </p>
         <div className="mt-4 flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>

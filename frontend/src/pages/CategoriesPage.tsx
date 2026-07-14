@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@apollo/client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
@@ -58,6 +58,8 @@ export function CategoriesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Category | null>(null);
   const [filter, setFilter] = useState<string>("all");
+  const [creatingDefaults, setCreatingDefaults] = useState(false);
+  const suppressToastRef = useRef(false);
 
   const { data, loading } = useQuery<{ categories: Category[] }>(CATEGORIES_QUERY);
   const allCategories = data?.categories ?? [];
@@ -73,7 +75,7 @@ export function CategoriesPage() {
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { categoryType: "expense", color: "#0ea5e9" },
@@ -83,7 +85,10 @@ export function CategoriesPage() {
 
   const [createCategory, { loading: creating }] = useMutation(CREATE_CATEGORY_MUTATION, {
     refetchQueries: [CATEGORIES_QUERY],
-    onCompleted: () => { toast.success("Categoria criada!"); closeModal(); },
+    onCompleted: () => {
+      if (!suppressToastRef.current) toast.success("Categoria criada!");
+      closeModal();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -124,10 +129,17 @@ export function CategoriesPage() {
     }
   }
 
-  function createDefaults() {
-    DEFAULT_CATEGORIES.forEach((cat) => {
-      createCategory({ variables: { input: cat } });
-    });
+  async function createDefaults() {
+    if (creatingDefaults) return;
+    setCreatingDefaults(true);
+    suppressToastRef.current = true;
+    try {
+      await Promise.all(DEFAULT_CATEGORIES.map((cat) => createCategory({ variables: { input: cat } })));
+      toast.success("Categorias padrão criadas!");
+    } finally {
+      suppressToastRef.current = false;
+      setCreatingDefaults(false);
+    }
   }
 
   return (
@@ -139,7 +151,7 @@ export function CategoriesPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {allCategories.length === 0 && (
-            <Button variant="secondary" onClick={createDefaults} className="flex-1 sm:flex-none">
+            <Button variant="secondary" onClick={createDefaults} loading={creatingDefaults} className="flex-1 sm:flex-none">
               Criar padrões
             </Button>
           )}
@@ -181,7 +193,7 @@ export function CategoriesPage() {
           <Tag size={40} className="text-gray-600" />
           <p className="text-sm text-gray-500">Nenhuma categoria cadastrada.</p>
           <div className="flex gap-2">
-            <Button onClick={createDefaults} variant="secondary">
+            <Button onClick={createDefaults} variant="secondary" loading={creatingDefaults}>
               Criar categorias padrão
             </Button>
             <Button onClick={openCreate}>
@@ -196,15 +208,15 @@ export function CategoriesPage() {
               key={cat.id}
               className="flex items-center justify-between rounded-xl border border-surface-border bg-surface-card p-4"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold"
                   style={{ backgroundColor: cat.color + "22", color: cat.color }}
                 >
                   {cat.name[0].toUpperCase()}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{cat.name}</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{cat.name}</p>
                   <Badge
                     variant={
                       cat.categoryType === "income"
@@ -218,15 +230,17 @@ export function CategoriesPage() {
                   </Badge>
                 </div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex shrink-0 gap-1">
                 <button
                   onClick={() => openEdit(cat)}
+                  aria-label={`Editar ${cat.name}`}
                   className="rounded-lg p-2 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
                 >
                   <Pencil size={14} />
                 </button>
                 <button
                   onClick={() => setDeleteId(cat.id)}
+                  aria-label={`Excluir ${cat.name}`}
                   className="rounded-lg p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
                 >
                   <Trash2 size={14} />
@@ -243,6 +257,7 @@ export function CategoriesPage() {
         onClose={closeModal}
         title={editing ? "Editar categoria" : "Nova categoria"}
         size="sm"
+        closeOnBackdropClick={!isDirty}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input label="Nome" placeholder="Ex: Alimentação" error={errors.name?.message} {...register("name")} />
@@ -255,7 +270,9 @@ export function CategoriesPage() {
                   key={color}
                   type="button"
                   onClick={() => setValue("color", color)}
-                  className="h-7 w-7 rounded-full transition-transform hover:scale-110"
+                  aria-label={`Cor ${color}`}
+                  aria-pressed={selectedColor === color}
+                  className="h-9 w-9 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-surface"
                   style={{
                     backgroundColor: color,
                     outline: selectedColor === color ? `2px solid ${color}` : "none",
@@ -277,7 +294,7 @@ export function CategoriesPage() {
       </Modal>
 
       {/* Delete confirmation */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir categoria" size="sm">
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir categoria" size="sm" closeOnBackdropClick={false}>
         <p className="text-sm text-gray-400">
           Tem certeza que deseja excluir esta categoria? Os lançamentos vinculados ficarão sem
           categoria.

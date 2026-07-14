@@ -22,7 +22,7 @@ import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CATEGORIES_QUERY } from "@/graphql/queries/categories";
 import { CREDIT_CARDS_QUERY } from "@/graphql/queries/creditCards";
 import {
-  formatCurrency, formatDate, RECURRENCE_TYPE_LABELS, PAYMENT_METHOD_LABELS, todayISO,
+  cn, formatCurrency, formatDate, RECURRENCE_TYPE_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, Category, CreditCard, Recurrence } from "@/types";
 
@@ -67,7 +67,7 @@ export function RecurrencesPage() {
   const [editing, setEditing] = useState<Recurrence | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
 
-  const { data } = useQuery<{ recurrences: Recurrence[] }>(RECURRENCES_QUERY, { variables: { activeOnly: false } });
+  const { data, loading } = useQuery<{ recurrences: Recurrence[] }>(RECURRENCES_QUERY, { variables: { activeOnly: false } });
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
   const { data: categoriesData } = useQuery<{ categories: Category[] }>(CATEGORIES_QUERY);
   const { data: cardsData } = useQuery<{ creditCards: CreditCard[] }>(CREDIT_CARDS_QUERY);
@@ -89,7 +89,7 @@ export function RecurrencesPage() {
 
   const {
     register, handleSubmit, reset, watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -113,8 +113,9 @@ export function RecurrencesPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const [toggleRec] = useMutation(TOGGLE_RECURRENCE_MUTATION, {
+  const [toggleRec, { loading: toggling }] = useMutation(TOGGLE_RECURRENCE_MUTATION, {
     refetchQueries: [RECURRENCES_QUERY],
+    onCompleted: () => toast.success("Recorrência atualizada!"),
     onError: (e) => toast.error(e.message),
   });
 
@@ -124,7 +125,7 @@ export function RecurrencesPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const [reprocessRec] = useMutation<{ reprocessRecurrence: number }>(
+  const [reprocessRec, { loading: reprocessing }] = useMutation<{ reprocessRecurrence: number }>(
     REPROCESS_RECURRENCE_MUTATION,
     {
       refetchQueries: [{ query: PENDING_RECURRENCES_QUERY }],
@@ -234,7 +235,11 @@ export function RecurrencesPage() {
         ))}
       </div>
 
-      {recurrences.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {[...Array(4)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-xl bg-surface-card" />)}
+        </div>
+      ) : recurrences.length === 0 ? (
         <Card className="flex flex-col items-center gap-3 py-16">
           <RefreshCw size={40} className="text-gray-600" />
           <p className="text-sm text-gray-500">Nenhuma recorrência {filter !== "all" ? "nessa categoria" : "cadastrada"}.</p>
@@ -244,37 +249,43 @@ export function RecurrencesPage() {
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {recurrences.map((rec) => (
             <div key={rec.id} className={`rounded-xl border bg-surface-card p-4 transition-colors ${rec.isActive ? "border-surface-border" : "border-surface-border opacity-60"}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex min-w-0 items-start gap-3">
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${rec.recurrenceType === "income" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
                     <RefreshCw size={16} />
                   </div>
-                  <div>
-                    <p className="font-medium text-white">{rec.description}</p>
-                    <p className="text-xs text-gray-500">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-white">{rec.description}</p>
+                    <p className="truncate text-xs text-gray-500">
                       {rec.accountName} · {PAYMENT_METHOD_LABELS[rec.paymentMethod]} ·{" "}
                       {rec.useBusinessDay ? `${rec.dayOfMonth}º dia útil` : `Dia ${rec.dayOfMonth}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   <button
                     onClick={() => reprocessRec({ variables: { id: rec.id } })}
-                    className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"
+                    disabled={reprocessing}
+                    aria-label="Reprocessar lançamento deste mês"
                     title="Reprocessar lançamento deste mês"
+                    className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw size={14} />
                   </button>
-                  <button onClick={() => toggleRec({ variables: { id: rec.id } })}
-                    className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors">
+                  <button
+                    onClick={() => toggleRec({ variables: { id: rec.id } })}
+                    disabled={toggling}
+                    aria-label={rec.isActive ? "Pausar recorrência" : "Retomar recorrência"}
+                    className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     {rec.isActive ? <Pause size={14} /> : <Play size={14} />}
                   </button>
-                  <button onClick={() => openEdit(rec)} className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"><Pencil size={14} /></button>
-                  <button onClick={() => setDeleteId(rec.id)} className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
+                  <button onClick={() => openEdit(rec)} aria-label={`Editar ${rec.description}`} className="rounded-lg p-1.5 text-gray-500 hover:bg-surface-hover hover:text-white transition-colors"><Pencil size={14} /></button>
+                  <button onClick={() => setDeleteId(rec.id)} aria-label={`Excluir ${rec.description}`} className="rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center justify-between">
+              <div className="mt-3 flex items-center justify-between gap-2">
                 <div className="flex gap-2 flex-wrap">
                   <Badge variant={rec.recurrenceType === "income" ? "income" : "expense"}>
                     {RECURRENCE_TYPE_LABELS[rec.recurrenceType]}
@@ -293,7 +304,7 @@ export function RecurrencesPage() {
                   )}
                   {!rec.isActive && <Badge variant="neutral">Pausada</Badge>}
                 </div>
-                <p className={`text-lg font-bold ${rec.recurrenceType === "income" ? "text-emerald-400" : "text-red-400"}`}>
+                <p className={cn("shrink-0 text-lg font-bold tabular-nums", rec.recurrenceType === "income" ? "text-emerald-400" : "text-red-400")}>
                   {formatCurrency(rec.amount)}
                 </p>
               </div>
@@ -309,7 +320,7 @@ export function RecurrencesPage() {
       )}
 
       {/* Modal */}
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar recorrência" : "Nova recorrência"} size="lg">
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar recorrência" : "Nova recorrência"} size="lg" closeOnBackdropClick={!isDirty}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input label="Descrição" placeholder="Ex: Salário, Spotify, Aluguel" error={errors.description?.message} {...register("description")} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -360,7 +371,7 @@ export function RecurrencesPage() {
       </Modal>
 
       {/* Delete modal */}
-      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir recorrência" size="sm">
+      <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir recorrência" size="sm" closeOnBackdropClick={false}>
         <p className="text-sm text-gray-400">Tem certeza? Os lançamentos já gerados não serão removidos.</p>
         <div className="mt-4 flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setDeleteId(null)}>Cancelar</Button>

@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
-import { LogOut, Menu, ChevronDown } from "lucide-react";
+import { LogOut, Menu, ChevronDown, Plus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -15,6 +15,7 @@ const pageTitles: Record<string, string> = {
   "/receivables": "A Receber",
   "/calendar": "Calendário",
   "/reports": "Relatórios",
+  "/simulator": "Simulador",
 };
 
 function getInitials(name?: string) {
@@ -33,6 +34,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
 
   const pageTitle = pageTitles[location.pathname] ?? "AuraCash";
   const initials = getInitials(user?.name);
@@ -44,8 +46,15 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
         setMenuOpen(false);
       }
     };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
 
   return (
@@ -62,8 +71,18 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
         <h1 className="hidden text-sm font-semibold text-white sm:block">{pageTitle}</h1>
       </div>
 
-      {/* Right — user menu */}
-      <div className="relative" ref={menuRef}>
+      {/* Right — ação rápida + user menu */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => navigate("/transactions", { state: { openCreate: true } })}
+          aria-label="Novo lançamento"
+          title="Novo lançamento"
+          className="hidden items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 sm:flex"
+        >
+          <Plus size={15} /> Novo
+        </button>
+
+        <div className="relative" ref={menuRef}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
           className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition-colors hover:bg-white/[0.05]"
@@ -104,6 +123,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
             </button>
           </div>
         )}
+        </div>
       </div>
     </header>
   );

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { LOGIN_MUTATION } from "@/graphql/queries/auth";
 import { useAuthStore } from "@/store/authStore";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -20,6 +21,7 @@ type FormData = z.infer<typeof schema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const [formError, setFormError] = useState<string | null>(null);
 
   const {
     register,
@@ -37,11 +39,14 @@ export function LoginPage() {
       navigate("/");
     },
     onError: (error) => {
-      toast.error(error.message || "Erro ao fazer login");
+      const message = error.message || "Erro ao fazer login";
+      setFormError(message);
+      toast.error(message);
     },
   });
 
   const onSubmit = (data: FormData) => {
+    setFormError(null);
     loginMutation({ variables: { input: { email: data.email, password: data.password } } });
   };
 
@@ -67,6 +72,7 @@ export function LoginPage() {
             type="email"
             placeholder="seu@email.com"
             autoComplete="email"
+            autoFocus
             error={errors.email?.message}
             {...register("email")}
           />
@@ -78,6 +84,8 @@ export function LoginPage() {
             error={errors.password?.message}
             {...register("password")}
           />
+
+          {formError && <p className="text-sm text-red-400">{formError}</p>}
 
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 cursor-pointer select-none">

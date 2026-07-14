@@ -61,6 +61,13 @@ export function ForgotPasswordPage() {
                   Voltar ao login
                 </Button>
               </Link>
+              <button
+                type="button"
+                onClick={() => setSent(false)}
+                className="text-sm text-sky-400 hover:text-sky-300 transition-colors"
+              >
+                Tentar outro e-mail
+              </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -75,6 +82,7 @@ export function ForgotPasswordPage() {
                 label="E-mail"
                 type="email"
                 placeholder="seu@email.com"
+                autoFocus
                 error={errors.email?.message}
                 {...register("email")}
               />
