@@ -81,6 +81,7 @@ class ReceivableQuery:
             user=user,
             is_receivable=True,
             receipt_status__in=["pending", "partial"],
+            is_pending_recurrence=False,
         ).exclude(parent_transaction__isnull=True, total_installments__gt=1)
 
         from django.db.models import Count

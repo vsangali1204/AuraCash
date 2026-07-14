@@ -90,13 +90,19 @@ def _build_balance_map(account_ids: list) -> dict:
         .values("transfer_account_id")
         .annotate(transfer_in=Coalesce(Sum("amount"), zero))
     )
-    in_map = {r["transfer_account_id"]: float(r["transfer_in"]) for r in in_rows}
+    in_map = {r["transfer_account_id"]: r["transfer_in"] for r in in_rows}
 
+    # Soma tudo em Decimal e só converte pra float no final — somar floats
+    # separadamente (income - expense - transfer_out + transfer_in) introduz
+    # erro de ponto flutuante (ex.: -1.4e-14 em vez de 0), que aparece na tela
+    # como "-R$ 0,00" numa conta com saldo zerado.
     return {
-        aid: (
-            float(out_map[aid]["income"]) - float(out_map[aid]["expense"]) - float(out_map[aid]["transfer_out"])
-            if aid in out_map else 0.0
-        ) + in_map.get(aid, 0.0)
+        aid: float(
+            (
+                out_map[aid]["income"] - out_map[aid]["expense"] - out_map[aid]["transfer_out"]
+                if aid in out_map else Decimal("0")
+            ) + in_map.get(aid, Decimal("0"))
+        )
         for aid in account_ids
     }
 

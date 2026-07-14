@@ -359,7 +359,7 @@ class TransactionQuery:
         # separadamente em future_income_amount/future_expenses_amount, mais abaixo.
         today = timezone.localdate()
         accounts = list(Account.objects.filter(user=user, is_active=True))
-        initial_sum = sum(float(a.initial_balance) for a in accounts)
+        initial_sum = sum((a.initial_balance for a in accounts), Decimal("0"))
         account_ids = [a.id for a in accounts]
 
         movements = (
@@ -386,20 +386,26 @@ class TransactionQuery:
             total=Coalesce(Sum("amount"), Value(0), output_field=DecimalField())
         )["total"]
 
-        total_balance = (
+        # Soma tudo em Decimal e só converte pra float no final (mesmo motivo
+        # do fix em _build_balance_map: evita erro de ponto flutuante tipo
+        # "-R$ 0,00" quando o saldo real é exatamente zero.
+        total_balance = float(
             initial_sum
-            + float(movements["total_income"])
-            - float(movements["total_expense"])
-            - float(movements["total_transfer_out"])
-            + float(transfer_in)
+            + movements["total_income"]
+            - movements["total_expense"]
+            - movements["total_transfer_out"]
+            + transfer_in
         )
 
         # ── Mês corrente ─────────────────────────────────────────────────────
+        # month_income exclui receitas lançadas dentro de um cartão (estornos,
+        # descontos de antecipação, renegociação): são abatimentos da fatura,
+        # não dinheiro novo entrando — contá-los como receita infla o mês.
         month_agg = _with_effective_date(
             Transaction.objects.filter(user=user, is_pending_recurrence=False)
         ).filter(effective_date__year=year, effective_date__month=month).aggregate(
             month_income=Coalesce(
-                Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                Sum(Case(When(transaction_type="income", credit_card__isnull=True, then=F("amount")), default=Value(0), output_field=DecimalField())),
                 Value(0), output_field=DecimalField(),
             ),
             month_expense=Coalesce(
@@ -606,10 +612,12 @@ class TransactionQuery:
         ]
 
         # ── Receitas por categoria ────────────────────────────────────────────
+        # exclui receitas de cartão (estornos/descontos) — não são renda, são
+        # abatimento de fatura, mesma razão do month_income acima.
         inc_cat_data = (
             _with_effective_date(Transaction.objects.filter(
                 user=user, transaction_type="income", category__isnull=False,
-                is_pending_recurrence=False,
+                is_pending_recurrence=False, credit_card__isnull=True,
             ))
             .filter(effective_date__year=year, effective_date__month=month)
             .values("category__name", "category__color")
@@ -655,7 +663,7 @@ class TransactionQuery:
             .values("y", "m")
             .annotate(
                 income=Coalesce(
-                    Sum(Case(When(transaction_type="income", then=F("amount")), default=Value(0), output_field=DecimalField())),
+                    Sum(Case(When(transaction_type="income", credit_card__isnull=True, then=F("amount")), default=Value(0), output_field=DecimalField())),
                     Value(0), output_field=DecimalField(),
                 ),
                 expense=Coalesce(
@@ -837,9 +845,30 @@ class TransactionQuery:
         )
 
         zero = Value(Decimal("0"), output_field=DecimalField())
-        total = float(txs.aggregate(s=Coalesce(Sum("amount"), zero))["s"])
-        receivable = float(txs.filter(is_receivable=True).aggregate(s=Coalesce(Sum("amount"), zero))["s"])
-        return InvoiceMonthSummary(total=total, receivable=receivable, personal=total - receivable)
+        # mesma regra de Invoice.total_amount: estorno (income) abate o total,
+        # senão a fatura do mês aparece inflada (estorno some como se fosse
+        # gasto normal em vez de reduzir o que já foi lançado).
+        total = float(
+            txs.aggregate(
+                s=Coalesce(
+                    Sum(Case(When(transaction_type="income", then=-F("amount")), default=F("amount"), output_field=DecimalField())),
+                    zero,
+                )
+            )["s"]
+        )
+        # "personal" usa o valor cheio de tudo que é reembolsável (recebido ou
+        # não) — quem vai pagar de volta não muda que aquilo nunca foi gasto
+        # pessoal. Já "receivable" (o que aparece como "a receber") tem que
+        # ser só o que ainda falta receber, senão diverge do que aparece no
+        # Dashboard e em "A Receber" pra itens já quitados.
+        receivable_face_value = float(
+            txs.filter(is_receivable=True).aggregate(s=Coalesce(Sum("amount"), zero))["s"]
+        )
+        receivable_pending = float(
+            txs.filter(is_receivable=True, receipt_status__in=["pending", "partial"])
+            .aggregate(s=Coalesce(Sum(F("amount") - F("received_amount")), zero))["s"]
+        )
+        return InvoiceMonthSummary(total=total, receivable=receivable_pending, personal=total - receivable_face_value)
 
 
 # ── Helpers de propagação para parcelas ───────────────────────────────────────
