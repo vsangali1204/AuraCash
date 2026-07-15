@@ -114,7 +114,7 @@ export function ReportsPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Relatórios</h1>
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Relatórios</h1>
           <p className="text-sm text-gray-500">Análise financeira detalhada</p>
         </div>
         <div className="flex items-center gap-2">

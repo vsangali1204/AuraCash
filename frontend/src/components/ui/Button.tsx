@@ -14,12 +14,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-surface disabled:cursor-not-allowed",
+          "inline-flex min-w-0 items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed",
           // loading fica em opacidade cheia (só o spinner indica estado) — disabled "de verdade" escurece
           disabled && !loading && "opacity-50",
           loading && "cursor-wait",
           {
-            "bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800":
+            "bg-sky-500 text-white shadow-sm shadow-sky-950/50 hover:bg-sky-400 active:translate-y-px active:bg-sky-600":
               variant === "primary",
             "bg-surface-card text-gray-300 border border-surface-border hover:bg-surface-hover hover:text-white":
               variant === "secondary",
@@ -29,8 +29,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
               variant === "ghost",
           },
           {
-            "h-8 px-3 text-sm": size === "sm",
-            "h-10 px-4 text-sm": size === "md",
+            "min-h-9 px-3 text-sm": size === "sm",
+            "min-h-10 px-4 text-sm": size === "md",
             "h-11 px-6 text-base": size === "lg",
           },
           className

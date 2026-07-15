@@ -66,8 +66,8 @@ export function CalendarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-white">Calendário Financeiro</h1>
-        <p className="text-sm text-gray-500">Eventos financeiros do mês</p>
+        <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Calendário Financeiro</h1>
+        <p className="mt-1 text-sm text-gray-400">Eventos financeiros do mês</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

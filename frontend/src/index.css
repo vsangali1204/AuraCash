@@ -14,6 +14,18 @@
     font-family: "Inter", system-ui, sans-serif;
   }
 
+  :focus-visible {
+    @apply outline-none ring-2 ring-sky-500 ring-offset-2 ring-offset-surface;
+  }
+
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled), a, select:not(:disabled), input[type="checkbox"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -32,5 +44,17 @@
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }

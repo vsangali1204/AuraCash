@@ -177,8 +177,8 @@ export function InvoicesPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-semibold text-white">Faturas</h1>
-        <p className="text-sm text-gray-500">Acompanhe as faturas dos seus cartões</p>
+        <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Faturas</h1>
+        <p className="mt-1 text-sm text-gray-400">Acompanhe as faturas dos seus cartões</p>
       </div>
 
       {/* Métricas — 4 cards distintos e não redundantes */}

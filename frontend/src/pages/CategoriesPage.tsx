@@ -146,8 +146,8 @@ export function CategoriesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Categorias</h1>
-          <p className="text-sm text-gray-500">{allCategories.length} categorias cadastradas</p>
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Categorias</h1>
+          <p className="mt-1 text-sm text-gray-400">{allCategories.length} categorias cadastradas</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {allCategories.length === 0 && (

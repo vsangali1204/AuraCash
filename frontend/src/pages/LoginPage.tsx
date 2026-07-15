@@ -51,19 +51,20 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-surface px-4 py-10">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(14,165,233,0.13),transparent_32%)]" />
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sky-600">
-            <span className="text-xl font-bold text-white">A</span>
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-sky-600 shadow-xl shadow-sky-950/50">
+            <img src="/logo.png" alt="" className="h-7 w-7 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white">AuraCash</h1>
-          <p className="mt-1 text-sm text-gray-500">Controle financeiro pessoal</p>
+          <p className="mt-1 text-sm text-gray-400">Clareza para decidir melhor sobre seu dinheiro</p>
         </div>
 
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="rounded-2xl border border-surface-border bg-surface-card p-6 space-y-4"
+          className="relative space-y-5 rounded-3xl border border-white/[0.09] bg-surface-card p-6 shadow-2xl shadow-black/40 sm:p-7"
         >
           <h2 className="text-base font-semibold text-white">Entrar na conta</h2>
 
@@ -91,7 +92,7 @@ export function LoginPage() {
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-surface-border bg-surface accent-sky-500"
+                className="h-5 w-5 rounded-md border-surface-border bg-surface accent-sky-500"
                 {...register("rememberMe")}
               />
               <span className="text-sm text-gray-400">Manter conectado</span>

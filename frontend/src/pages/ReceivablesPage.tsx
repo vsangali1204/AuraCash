@@ -9,10 +9,9 @@ import {
   Clock, Calendar, ChevronDown, ChevronUp, List,
   UserCheck, Search, X, TrendingDown, TrendingUp, FileDown,
 } from "lucide-react";
-import {
-  downloadReceivablesPDF,
-  type DebtorGroup,
-  type CategoryTotal,
+import type {
+  DebtorGroup,
+  CategoryTotal,
 } from "@/components/reports/ReceivablesPDFReport";
 import { z } from "zod";
 
@@ -670,6 +669,7 @@ export function ReceivablesPage() {
       });
       const periodLabel = PERIOD_TABS.find((t) => t.value === period)?.label ?? "Todos";
 
+      const { downloadReceivablesPDF } = await import("@/components/reports/ReceivablesPDFReport");
       await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand, periodLabel });
       setPdfModalOpen(false);
     } catch {
@@ -684,8 +684,8 @@ export function ReceivablesPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-white">Valores a Receber</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Valores a Receber</h1>
+          <p className="mt-1 text-sm text-gray-400">
             Total pendente:{" "}
             <span className="font-semibold text-amber-400">{formatCurrency(totalPending)}</span>
           </p>

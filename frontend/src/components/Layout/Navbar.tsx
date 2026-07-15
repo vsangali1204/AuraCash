@@ -58,7 +58,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
   }, []);
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-surface-border bg-surface-card px-4 md:px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.07] bg-surface-card/95 px-4 backdrop-blur md:px-6 lg:px-8">
       {/* Left */}
       <div className="flex items-center gap-3">
         <button
@@ -68,7 +68,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
         >
           <Menu size={20} />
         </button>
-        <h1 className="hidden text-sm font-semibold text-white sm:block">{pageTitle}</h1>
+        <h1 className="text-sm font-semibold text-white md:hidden">{pageTitle}</h1>
       </div>
 
       {/* Right — ação rápida + user menu */}
@@ -77,7 +77,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
           onClick={() => navigate("/transactions", { state: { openCreate: true } })}
           aria-label="Novo lançamento"
           title="Novo lançamento"
-          className="hidden items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 sm:flex"
+          className="hidden min-h-10 items-center gap-1.5 rounded-xl bg-sky-500 px-4 text-sm font-semibold text-white shadow-sm shadow-sky-950/50 transition-all hover:bg-sky-400 sm:flex"
         >
           <Plus size={15} /> Novo
         </button>

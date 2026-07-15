@@ -39,8 +39,8 @@ export function SimulatorPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-white">Simulador</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Simulador</h1>
+        <p className="mt-1 text-sm text-gray-400">
           Veja o impacto de um recebimento ou de uma compra parcelada antes de decidir — nada aqui é salvo.
         </p>
       </div>

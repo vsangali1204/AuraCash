@@ -1,4 +1,4 @@
-import { LayoutDashboard, ArrowLeftRight, Wallet, CreditCard, MoreHorizontal, Plus } from "lucide-react";
+import { LayoutDashboard, ArrowLeftRight, CreditCard, MoreHorizontal, Plus } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +12,6 @@ const leftItems = [
 ];
 
 const rightItems = [
-  { to: "/accounts", icon: Wallet, label: "Contas" },
   { to: "/credit-cards", icon: CreditCard, label: "Cartões" },
 ];
 
@@ -42,7 +41,7 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
   const navigate = useNavigate();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-stretch border-t border-surface-border bg-surface-card md:hidden">
+    <nav aria-label="Navegação principal" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 flex h-[4.5rem] items-stretch border-t border-white/[0.08] bg-surface-card/95 backdrop-blur md:hidden">
       {leftItems.map((item) => <NavItem key={item.to} {...item} />)}
 
       {/* Acesso rápido — abre direto o formulário de novo lançamento, de qualquer página */}
@@ -51,7 +50,7 @@ export function BottomNav({ onMoreClick }: BottomNavProps) {
         aria-label="Novo lançamento"
         className="flex flex-1 flex-col items-center justify-center"
       >
-        <span className="flex h-11 w-11 -translate-y-2 items-center justify-center rounded-full bg-sky-600 shadow-lg shadow-sky-900/40 active:bg-sky-700">
+        <span className="flex h-12 w-12 -translate-y-2 items-center justify-center rounded-2xl bg-sky-500 shadow-lg shadow-sky-950/60 active:bg-sky-600">
           <Plus size={22} className="text-white" />
         </span>
       </button>

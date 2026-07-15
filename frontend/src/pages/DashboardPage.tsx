@@ -5,11 +5,13 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight, Bell, Layers } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, ArrowLeftRight, Users, CreditCard, RefreshCw, Calculator, ChevronLeft, ChevronRight, Bell, Layers, TriangleAlert } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { PendingRecurrencesModal } from "@/components/PendingRecurrencesModal";
 import { DASHBOARD_SUMMARY_QUERY, TRANSACTIONS_QUERY, PENDING_RECURRENCES_QUERY, INSTALLMENTS_BY_MONTH_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
@@ -33,7 +35,7 @@ function getInitialMonth() {
 }
 
 const TOOLTIP_STYLE = {
-  contentStyle: { background: "#13131f", border: "1px solid #2a2a3a", borderRadius: "8px", fontSize: "12px" },
+  contentStyle: { background: "#181818", border: "1px solid #303030", borderRadius: "12px", fontSize: "12px" },
   labelStyle: { color: "#fff" },
   itemStyle: { color: "#a0a0b0" },
 };
@@ -130,12 +132,15 @@ export function DashboardPage() {
         </button>
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-        <div className="flex items-center gap-1">
+      <PageHeader
+        eyebrow="Visão geral"
+        title="Sua vida financeira"
+        description="Acompanhe o que entrou, o que ainda sai e como o mês deve terminar."
+        action={<div className="flex items-center gap-1 rounded-xl border border-surface-border bg-surface-card p-1">
           <button
             onClick={prevMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+            aria-label="Mês anterior"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
           >
             <ChevronLeft size={16} />
           </button>
@@ -144,12 +149,23 @@ export function DashboardPage() {
           </span>
           <button
             onClick={nextMonth}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
+            aria-label="Próximo mês"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-surface-hover hover:text-white transition-colors"
           >
             <ChevronRight size={16} />
           </button>
+        </div>}
+      />
+
+      {!summaryLoading && (summary?.projectedBalance ?? 0) < 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/25 bg-red-500/[0.08] p-4">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-400"><TriangleAlert size={17} /></div>
+          <div>
+            <p className="text-sm font-semibold text-red-200">Atenção ao saldo projetado</p>
+            <p className="mt-0.5 text-sm leading-6 text-red-300/75">Considerando as entradas e compromissos conhecidos, o mês pode terminar em {formatCurrency(summary?.projectedBalance ?? 0)}.</p>
+          </div>
         </div>
-      </div>
+      )}
 
 
       {/* Summary cards */}
@@ -195,7 +211,7 @@ export function DashboardPage() {
           <h2 className="text-sm font-semibold text-white">Projeção do Mês</h2>
         </div>
         {summaryLoading ? (
-          <div className="h-24 animate-pulse rounded bg-surface-border" />
+          <div className="space-y-3"><Skeleton className="h-5 w-44" /><Skeleton className="h-16 w-full" /><Skeleton className="h-5 w-2/3" /></div>
         ) : (
           <div>
             {/* Ponto de partida */}
@@ -542,12 +558,12 @@ function SummaryCard({
   const trendGood = trend ? (trendPositiveIsGood ? trend.dir === "up" : trend.dir === "down") : null;
 
   return (
-    <Card>
+    <Card interactive>
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-gray-500 truncate">{label}</p>
           {value === null ? (
-            <div className="mt-1 h-6 w-24 animate-pulse rounded bg-surface-border" />
+            <Skeleton className="mt-2 h-6 w-24" />
           ) : (
             <p className={`mt-1 text-base sm:text-xl font-bold ${c.value}`}>{formatCurrency(value)}</p>
           )}

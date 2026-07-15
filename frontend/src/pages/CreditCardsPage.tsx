@@ -144,8 +144,8 @@ export function CreditCardsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Cartões de Crédito</h1>
-          <p className="text-sm text-gray-500">{cards.length} cartão(s) cadastrado(s)</p>
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Cartões de Crédito</h1>
+          <p className="mt-1 text-sm text-gray-400">{cards.length} cartão(s) cadastrado(s)</p>
         </div>
         <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Novo cartão</Button>
       </div>

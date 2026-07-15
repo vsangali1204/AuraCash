@@ -107,11 +107,11 @@ function SidebarContent({
                   onClick={onItemClick}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                      "relative flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150",
                       collapsed ? "justify-center" : "gap-3",
                       isActive
-                        ? "bg-white/[0.07] text-white"
-                        : "text-gray-500 hover:bg-white/[0.04] hover:text-gray-300"
+                        ? "bg-sky-500/10 text-white"
+                        : "text-gray-400 hover:bg-white/[0.05] hover:text-white"
                     )
                   }
                 >
@@ -125,6 +125,7 @@ function SidebarContent({
                         )}
                       />
                       {!collapsed && <span className="truncate">{label}</span>}
+                      {isActive && !collapsed && <span className="absolute right-2 h-1.5 w-1.5 rounded-full bg-sky-400" />}
                     </>
                   )}
                 </NavLink>
@@ -157,7 +158,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden md:flex h-full flex-col border-r border-surface-border bg-surface-card transition-all duration-300",
+          "hidden md:flex h-full flex-col border-r border-white/[0.07] bg-surface-card transition-all duration-300",
           collapsed ? "w-16" : "w-56"
         )}
       >

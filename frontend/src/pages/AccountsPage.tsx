@@ -117,8 +117,8 @@ export function AccountsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Contas Bancárias</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Contas Bancárias</h1>
+          <p className="mt-1 text-sm text-gray-400">
             Saldo total:{" "}
             <span className={cn("tabular-nums", totalBalance >= 0 ? "text-emerald-400" : "text-red-400")}>
               {formatCurrency(totalBalance)}
