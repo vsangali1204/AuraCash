@@ -28,9 +28,11 @@ type Mode = "income" | "card";
 
 function MonthProjection({ date, impact }: { date: string; impact: number }) {
   const [year, month] = date.slice(0, 7).split("-").map(Number);
-  const { data, loading } = useQuery<{ dashboardSummary: DashboardSummary }>(DASHBOARD_SUMMARY_QUERY, {
+  const { data, loading, error } = useQuery<{ dashboardSummary: DashboardSummary }>(DASHBOARD_SUMMARY_QUERY, {
     variables: { year, month },
     skip: !year || !month,
+    fetchPolicy: "network-only",
+    notifyOnNetworkStatusChange: true,
   });
   const summary = data?.dashboardSummary;
   const simulatedIncome = roundMoney((summary?.futureIncomeAmount ?? 0) + (summary?.recurrenceIncomeAmount ?? 0) + (summary?.monthReceivable ?? 0) + Math.max(impact, 0));
@@ -48,8 +50,12 @@ function MonthProjection({ date, impact }: { date: string; impact: number }) {
           {impact >= 0 ? "+ " : "− "}{formatCurrency(Math.abs(impact))}
         </span>
       </div>
-      {loading ? (
+      {loading && !summary ? (
         <div className="space-y-3"><div className="h-5 animate-pulse rounded bg-surface" /><div className="h-28 animate-pulse rounded bg-surface" /></div>
+      ) : error || !summary ? (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-300">
+          Não foi possível carregar a projeção deste mês. Tente selecionar o mês novamente.
+        </div>
       ) : (
         <div>
           <div className="flex items-center justify-between border-b border-surface-border pb-3">
