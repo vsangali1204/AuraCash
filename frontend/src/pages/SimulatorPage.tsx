@@ -7,7 +7,7 @@ import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Wallet, CreditCard as CardIcon } from "lucide-react";
+import { Wallet, CreditCard as CardIcon, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -26,17 +26,19 @@ const TOOLTIP_STYLE = {
 
 type Mode = "income" | "card";
 
-function MonthProjection({ date, impact, label }: { date: string; impact: number; label: string }) {
+function MonthProjection({ date, impact }: { date: string; impact: number }) {
   const [year, month] = date.slice(0, 7).split("-").map(Number);
   const { data, loading } = useQuery<{ dashboardSummary: DashboardSummary }>(DASHBOARD_SUMMARY_QUERY, {
     variables: { year, month },
     skip: !year || !month,
   });
-  const before = data?.dashboardSummary.projectedBalance ?? 0;
-  const after = roundMoney(before + impact);
+  const summary = data?.dashboardSummary;
+  const simulatedIncome = roundMoney((summary?.futureIncomeAmount ?? 0) + (summary?.recurrenceIncomeAmount ?? 0) + (summary?.monthReceivable ?? 0) + Math.max(impact, 0));
+  const simulatedOut = roundMoney((summary?.pendingInvoicesAmount ?? 0) + (summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0) + (summary?.recurrenceCreditPendingAmount ?? 0) + Math.max(-impact, 0));
+  const after = roundMoney((summary?.totalBalance ?? 0) + simulatedIncome - simulatedOut);
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-white">Projeção do mês</p>
@@ -47,22 +49,66 @@ function MonthProjection({ date, impact, label }: { date: string; impact: number
         </span>
       </div>
       {loading ? (
-        <div className="h-16 animate-pulse rounded-xl bg-surface" />
+        <div className="space-y-3"><div className="h-5 animate-pulse rounded bg-surface" /><div className="h-28 animate-pulse rounded bg-surface" /></div>
       ) : (
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="rounded-xl bg-surface p-3">
-            <p className="text-[11px] text-gray-500">Sem a simulação</p>
-            <p className="mt-1 text-sm font-bold text-gray-300">{formatCurrency(before)}</p>
+        <div>
+          <div className="flex items-center justify-between border-b border-surface-border pb-3">
+            <span className="text-sm text-gray-300">Saldo atual em contas</span>
+            <span className="text-sm font-semibold text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
           </div>
-          <span className="text-gray-600">→</span>
-          <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
-            <p className="text-[11px] text-sky-400/70">Com a simulação</p>
-            <p className={cn("mt-1 text-sm font-bold", after >= 0 ? "text-sky-300" : "text-red-400")}>{formatCurrency(after)}</p>
+          <div className="flex flex-col gap-4 py-4 sm:flex-row sm:gap-0">
+            <div className="flex-1 space-y-2">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-emerald-500/70">O que ainda entra</p>
+              <ProjectionRow color="bg-emerald-400" label="Receitas agendadas" value={summary?.futureIncomeAmount ?? 0} positive />
+              <ProjectionRow color="bg-violet-400" label="Recorrências (salário etc.)" value={summary?.recurrenceIncomeAmount ?? 0} positive />
+              <ProjectionRow color="bg-amber-400" label="Cobranças a receber" value={summary?.monthReceivable ?? 0} positive />
+              {impact > 0 && <ProjectionRow color="bg-sky-400" label="Recebimento simulado" value={impact} positive highlight />}
+              <div className="mt-1 flex items-center justify-between border-t border-surface-border/60 pt-2"><span className="text-xs font-semibold text-gray-400">Total de entradas</span><span className="text-sm font-bold text-emerald-400">+ {formatCurrency(simulatedIncome)}</span></div>
+            </div>
+            <div className="hidden w-px bg-surface-border sm:mx-6 sm:block" /><div className="h-px bg-surface-border sm:hidden" />
+            <div className="flex-1 space-y-2">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-red-500/70">O que ainda sai</p>
+              <ProjectionRow color="bg-orange-400" label="Faturas de cartão" value={summary?.pendingInvoicesAmount ?? 0} />
+              <ProjectionRow color="bg-red-400" label="Boletos" value={roundMoney((summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0))} />
+              <ProjectionRow color="bg-violet-400" label="Recorrências no crédito não lançadas" value={summary?.recurrenceCreditPendingAmount ?? 0} />
+              {impact < 0 && <ProjectionRow color="bg-sky-400" label="Parcela simulada" value={Math.abs(impact)} highlight />}
+              <div className="mt-1 flex items-center justify-between border-t border-surface-border/60 pt-2"><span className="text-xs font-semibold text-gray-400">Total de saídas</span><span className="text-sm font-bold text-red-400">− {formatCurrency(simulatedOut)}</span></div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-surface-border pt-3">
+            <div><span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span><p className="text-[11px] text-gray-600">Já inclui a parcela simulada deste mês</p></div>
+            <span className={cn("text-lg font-bold", after >= 0 ? "text-sky-300" : "text-red-400")}>{formatCurrency(after)}</span>
           </div>
         </div>
       )}
-      <p className="mt-3 text-[11px] text-gray-600">{label} sobre a projeção já calculada com lançamentos, recorrências, valores a receber e faturas.</p>
     </Card>
+  );
+}
+
+function ProjectionRow({ color, label, value, positive = false, highlight = false }: { color: string; label: string; value: number; positive?: boolean; highlight?: boolean }) {
+  return <div className={cn("flex items-center justify-between gap-3", highlight && "rounded-lg bg-sky-500/5 px-2 py-1")}><span className="flex items-center gap-2 text-xs text-gray-500"><span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", color)} />{label}</span><span className={cn("whitespace-nowrap text-sm font-medium", positive ? "text-emerald-400" : "text-red-400")}>{positive ? "+ " : "− "}{formatCurrency(value)}</span></div>;
+}
+
+function ProjectionTimeline({ items }: { items: Array<{ key: string; date: string; impact: number }> }) {
+  const [selected, setSelected] = useState(0);
+  const safeIndex = Math.min(selected, Math.max(items.length - 1, 0));
+  const item = items[safeIndex];
+  if (!item) return null;
+  return (
+    <div className="space-y-3 lg:col-span-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><h2 className="text-base font-semibold text-white">Projeção dos próximos meses</h2><p className="mt-1 text-xs text-gray-500">A mesma projeção do Dashboard, incluindo a parcela simulada em cada mês.</p></div>
+        <div className="flex items-center gap-2">
+          <button type="button" aria-label="Mês anterior" disabled={safeIndex === 0} onClick={() => setSelected((v) => Math.max(0, v - 1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-border text-gray-400 hover:text-white disabled:opacity-30"><ChevronLeft size={16} /></button>
+          <span className="min-w-[130px] text-center text-sm font-semibold capitalize text-white">{formatMonthYear(item.date.slice(0, 7))}</span>
+          <button type="button" aria-label="Próximo mês" disabled={safeIndex === items.length - 1} onClick={() => setSelected((v) => Math.min(items.length - 1, v + 1))} className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-border text-gray-400 hover:text-white disabled:opacity-30"><ChevronRight size={16} /></button>
+        </div>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {items.map((month, index) => <button key={month.key} type="button" onClick={() => setSelected(index)} className={cn("shrink-0 rounded-lg border px-3 py-1.5 text-xs capitalize transition-colors", index === safeIndex ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-surface-border text-gray-500 hover:text-gray-300")}>{formatMonthYear(month.date.slice(0, 7))}</button>)}
+      </div>
+      <MonthProjection key={item.key} date={item.date} impact={item.impact} />
+    </div>
   );
 }
 
@@ -203,7 +249,6 @@ function IncomeSimulator() {
           </Card>
         ) : (
           <>
-            <MonthProjection date={schedule[0].date} impact={schedule[0].amount} label="Inclui a primeira parcela deste recebimento" />
             <Card>
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-xs text-gray-500">Saldo atual — {account.name}</p>
@@ -250,6 +295,9 @@ function IncomeSimulator() {
           </>
         )}
       </div>
+      {account && schedule.length > 0 && (
+        <ProjectionTimeline items={schedule.map((s) => ({ key: String(s.number), date: s.date, impact: s.amount }))} />
+      )}
     </div>
   );
 }
@@ -381,7 +429,6 @@ function CardSimulator() {
           </Card>
         ) : (
           <>
-            <MonthProjection date={schedule[0].dueDate} impact={-schedule[0].amount} label="Inclui a primeira parcela na data de vencimento da fatura" />
             <Card>
               <p className="mb-3 text-sm font-semibold text-white">Impacto no limite</p>
               <p className="mb-3 text-xs text-gray-500">
@@ -448,6 +495,9 @@ function CardSimulator() {
           </>
         )}
       </div>
+      {card && schedule.length > 0 && (
+        <ProjectionTimeline items={schedule.map((s) => ({ key: String(s.number), date: s.dueDate, impact: -s.amount }))} />
+      )}
     </div>
   );
 }
