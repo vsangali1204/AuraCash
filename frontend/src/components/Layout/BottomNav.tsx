@@ -1,9 +1,10 @@
 import { LayoutDashboard, ArrowLeftRight, CreditCard, MoreHorizontal, Plus } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 interface BottomNavProps {
   onMoreClick: () => void;
+  onNewTransaction: () => void;
 }
 
 const leftItems = [
@@ -37,16 +38,14 @@ function NavItem({ to, icon: Icon, label, end }: (typeof leftItems)[number]) {
   );
 }
 
-export function BottomNav({ onMoreClick }: BottomNavProps) {
-  const navigate = useNavigate();
-
+export function BottomNav({ onMoreClick, onNewTransaction }: BottomNavProps) {
   return (
     <nav aria-label="Navegação principal" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 flex h-[4.5rem] items-stretch border-t border-white/[0.08] bg-surface-card/95 backdrop-blur md:hidden">
       {leftItems.map((item) => <NavItem key={item.to} {...item} />)}
 
       {/* Acesso rápido — abre direto o formulário de novo lançamento, de qualquer página */}
       <button
-        onClick={() => navigate("/transactions", { state: { openCreate: true } })}
+        onClick={onNewTransaction}
         aria-label="Novo lançamento"
         className="flex flex-1 flex-col items-center justify-center"
       >

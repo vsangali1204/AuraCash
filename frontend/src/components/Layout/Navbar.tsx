@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
 import { LogOut, Menu, ChevronDown, Plus } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -27,14 +27,14 @@ function getInitials(name?: string) {
 
 interface NavbarProps {
   onMobileMenuToggle: () => void;
+  onNewTransaction: () => void;
 }
 
-export function Navbar({ onMobileMenuToggle }: NavbarProps) {
+export function Navbar({ onMobileMenuToggle, onNewTransaction }: NavbarProps) {
   const { user, logout } = useAuthStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
-  const navigate = useNavigate();
 
   const pageTitle = pageTitles[location.pathname] ?? "AuraCash";
   const initials = getInitials(user?.name);
@@ -74,7 +74,7 @@ export function Navbar({ onMobileMenuToggle }: NavbarProps) {
       {/* Right — ação rápida + user menu */}
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate("/transactions", { state: { openCreate: true } })}
+          onClick={onNewTransaction}
           aria-label="Novo lançamento"
           title="Novo lançamento"
           className="hidden min-h-10 items-center gap-1.5 rounded-xl bg-sky-500 px-4 text-sm font-semibold text-white shadow-sm shadow-sky-950/50 transition-all hover:bg-sky-400 sm:flex"

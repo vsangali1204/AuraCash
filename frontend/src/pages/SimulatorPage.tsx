@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CREDIT_CARDS_QUERY, ALL_INVOICES_QUERY } from "@/graphql/queries/creditCards";
+import { DASHBOARD_SUMMARY_QUERY } from "@/graphql/queries/transactions";
 import { cn, formatCurrency, formatDate, formatMonthYear, roundMoney, addMonths, todayISO } from "@/lib/utils";
-import type { Account, CreditCard, InvoiceWithCard } from "@/types";
+import type { Account, CreditCard, DashboardSummary, InvoiceWithCard } from "@/types";
 
 const TOOLTIP_STYLE = {
   contentStyle: { background: "#13131f", border: "1px solid #2a2a3a", borderRadius: "8px", fontSize: "12px" },
@@ -24,6 +25,46 @@ const TOOLTIP_STYLE = {
 };
 
 type Mode = "income" | "card";
+
+function MonthProjection({ date, impact, label }: { date: string; impact: number; label: string }) {
+  const [year, month] = date.slice(0, 7).split("-").map(Number);
+  const { data, loading } = useQuery<{ dashboardSummary: DashboardSummary }>(DASHBOARD_SUMMARY_QUERY, {
+    variables: { year, month },
+    skip: !year || !month,
+  });
+  const before = data?.dashboardSummary.projectedBalance ?? 0;
+  const after = roundMoney(before + impact);
+
+  return (
+    <Card>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Projeção do mês</p>
+          <p className="mt-0.5 text-xs capitalize text-gray-500">{formatMonthYear(date.slice(0, 7))}</p>
+        </div>
+        <span className={cn("rounded-lg px-2.5 py-1 text-xs font-semibold", impact >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>
+          {impact >= 0 ? "+ " : "− "}{formatCurrency(Math.abs(impact))}
+        </span>
+      </div>
+      {loading ? (
+        <div className="h-16 animate-pulse rounded-xl bg-surface" />
+      ) : (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <div className="rounded-xl bg-surface p-3">
+            <p className="text-[11px] text-gray-500">Sem a simulação</p>
+            <p className="mt-1 text-sm font-bold text-gray-300">{formatCurrency(before)}</p>
+          </div>
+          <span className="text-gray-600">→</span>
+          <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+            <p className="text-[11px] text-sky-400/70">Com a simulação</p>
+            <p className={cn("mt-1 text-sm font-bold", after >= 0 ? "text-sky-300" : "text-red-400")}>{formatCurrency(after)}</p>
+          </div>
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-gray-600">{label} sobre a projeção já calculada com lançamentos, recorrências, valores a receber e faturas.</p>
+    </Card>
+  );
+}
 
 /** Divide o total em N parcelas (base + resto na última) — mesma regra usada no backend ao criar parcelamentos. */
 function splitInstallments(total: number, n: number): number[] {
@@ -162,6 +203,7 @@ function IncomeSimulator() {
           </Card>
         ) : (
           <>
+            <MonthProjection date={schedule[0].date} impact={schedule[0].amount} label="Inclui a primeira parcela deste recebimento" />
             <Card>
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-xs text-gray-500">Saldo atual — {account.name}</p>
@@ -339,6 +381,7 @@ function CardSimulator() {
           </Card>
         ) : (
           <>
+            <MonthProjection date={schedule[0].dueDate} impact={-schedule[0].amount} label="Inclui a primeira parcela na data de vencimento da fatura" />
             <Card>
               <p className="mb-3 text-sm font-semibold text-white">Impacto no limite</p>
               <p className="mb-3 text-xs text-gray-500">
