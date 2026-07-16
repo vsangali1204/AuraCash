@@ -46,8 +46,8 @@ function MonthProjection({ date, impact }: { date: string; impact: number }) {
           <p className="text-sm font-semibold text-white">Projeção do mês</p>
           <p className="mt-0.5 text-xs capitalize text-gray-500">{formatMonthYear(date.slice(0, 7))}</p>
         </div>
-        <span className={cn("rounded-lg px-2.5 py-1 text-xs font-semibold", impact >= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>
-          {impact >= 0 ? "+ " : "− "}{formatCurrency(Math.abs(impact))}
+        <span className={cn("rounded-lg px-2.5 py-1 text-xs font-semibold", impact === 0 ? "bg-white/5 text-gray-500" : impact > 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400")}>
+          {impact === 0 ? "Sem parcela" : <>{impact > 0 ? "+ " : "− "}{formatCurrency(Math.abs(impact))}</>}
         </span>
       </div>
       {loading && !summary ? (
@@ -82,7 +82,7 @@ function MonthProjection({ date, impact }: { date: string; impact: number }) {
             </div>
           </div>
           <div className="flex items-center justify-between border-t border-surface-border pt-3">
-            <div><span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span><p className="text-[11px] text-gray-600">Já inclui a parcela simulada deste mês</p></div>
+            <div><span className="text-sm font-semibold text-gray-200">Saldo estimado fim do mês</span><p className="text-[11px] text-gray-600">{impact === 0 ? "Neste mês não há parcela simulada" : "Já inclui a parcela simulada deste mês"}</p></div>
             <span className={cn("text-lg font-bold", after >= 0 ? "text-sky-300" : "text-red-400")}>{formatCurrency(after)}</span>
           </div>
         </div>
@@ -116,6 +116,24 @@ function ProjectionTimeline({ items }: { items: Array<{ key: string; date: strin
       <MonthProjection key={item.key} date={item.date} impact={item.impact} />
     </div>
   );
+}
+
+function buildProjectionMonths(items: Array<{ date: string; impact: number }>) {
+  if (items.length === 0) return [];
+  const firstMonth = items.map((item) => item.date.slice(0, 7)).sort()[0];
+  const sortedMonths = items.map((item) => item.date.slice(0, 7)).sort();
+  const lastMonth = sortedMonths[sortedMonths.length - 1] ?? firstMonth;
+  const [firstYear, firstNumber] = firstMonth.split("-").map(Number);
+  const [lastYear, lastNumber] = lastMonth.split("-").map(Number);
+  const installmentSpan = (lastYear - firstYear) * 12 + lastNumber - firstNumber + 1;
+  const monthCount = Math.max(12, installmentSpan);
+
+  return Array.from({ length: monthCount }, (_, index) => {
+    const date = addMonths(`${firstMonth}-01`, index);
+    const month = date.slice(0, 7);
+    const impact = roundMoney(items.filter((item) => item.date.startsWith(month)).reduce((total, item) => total + item.impact, 0));
+    return { key: month, date, impact };
+  });
 }
 
 /** Divide o total em N parcelas (base + resto na última) — mesma regra usada no backend ao criar parcelamentos. */
@@ -302,7 +320,7 @@ function IncomeSimulator() {
         )}
       </div>
       {account && schedule.length > 0 && (
-        <ProjectionTimeline items={schedule.map((s) => ({ key: String(s.number), date: s.date, impact: s.amount }))} />
+        <ProjectionTimeline items={buildProjectionMonths(schedule.map((s) => ({ date: s.date, impact: s.amount })))} />
       )}
     </div>
   );
@@ -502,7 +520,7 @@ function CardSimulator() {
         )}
       </div>
       {card && schedule.length > 0 && (
-        <ProjectionTimeline items={schedule.map((s) => ({ key: String(s.number), date: s.dueDate, impact: -s.amount }))} />
+        <ProjectionTimeline items={buildProjectionMonths(schedule.map((s) => ({ date: s.dueDate, impact: -s.amount })))} />
       )}
     </div>
   );
