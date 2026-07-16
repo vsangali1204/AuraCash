@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@apollo/client";
+import { useEffect, useMemo, useState } from "react";
+import { useApolloClient, useQuery } from "@apollo/client";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,18 +26,10 @@ const TOOLTIP_STYLE = {
 
 type Mode = "income" | "card";
 
-function MonthProjection({ date, impact }: { date: string; impact: number }) {
-  const [year, month] = date.slice(0, 7).split("-").map(Number);
-  const { data, loading, error } = useQuery<{ dashboardSummary: DashboardSummary }>(DASHBOARD_SUMMARY_QUERY, {
-    variables: { year, month },
-    skip: !year || !month,
-    fetchPolicy: "network-only",
-    notifyOnNetworkStatusChange: true,
-  });
-  const summary = data?.dashboardSummary;
+function MonthProjection({ date, impact, summary, openingBalance, loading, error }: { date: string; impact: number; summary?: DashboardSummary; openingBalance?: number; loading: boolean; error: boolean }) {
   const simulatedIncome = roundMoney((summary?.futureIncomeAmount ?? 0) + (summary?.recurrenceIncomeAmount ?? 0) + (summary?.monthReceivable ?? 0) + Math.max(impact, 0));
   const simulatedOut = roundMoney((summary?.pendingInvoicesAmount ?? 0) + (summary?.futureExpensesAmount ?? 0) + (summary?.recurrenceExpensesAmount ?? 0) + (summary?.recurrenceCreditPendingAmount ?? 0) + Math.max(-impact, 0));
-  const after = roundMoney((summary?.totalBalance ?? 0) + simulatedIncome - simulatedOut);
+  const after = roundMoney((openingBalance ?? 0) + simulatedIncome - simulatedOut);
 
   return (
     <Card className="min-w-0">
@@ -59,8 +51,8 @@ function MonthProjection({ date, impact }: { date: string; impact: number }) {
       ) : (
         <div>
           <div className="flex items-center justify-between border-b border-surface-border pb-3">
-            <span className="text-sm text-gray-300">Saldo atual em contas</span>
-            <span className="text-sm font-semibold text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
+            <span className="text-sm text-gray-300">{openingBalance === summary?.totalBalance ? "Saldo atual em contas" : "Saldo trazido do mês anterior"}</span>
+            <span className="text-sm font-semibold text-white">{formatCurrency(openingBalance ?? 0)}</span>
           </div>
           <div className="flex flex-col gap-4 py-4 sm:flex-row sm:gap-0">
             <div className="flex-1 space-y-2">
@@ -97,8 +89,48 @@ function ProjectionRow({ color, label, value, positive = false, highlight = fals
 
 function ProjectionTimeline({ items }: { items: Array<{ key: string; date: string; impact: number }> }) {
   const [selected, setSelected] = useState(0);
+  const [summaries, setSummaries] = useState<Record<string, DashboardSummary>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const client = useApolloClient();
+  const itemsKey = items.map((projection) => `${projection.key}:${projection.impact}`).join("|");
   const safeIndex = Math.min(selected, Math.max(items.length - 1, 0));
   const item = items[safeIndex];
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+    Promise.all(items.map(async (projection) => {
+      const [year, month] = projection.date.slice(0, 7).split("-").map(Number);
+      const result = await client.query<{ dashboardSummary: DashboardSummary }>({
+        query: DASHBOARD_SUMMARY_QUERY, variables: { year, month }, fetchPolicy: "network-only",
+      });
+      return [projection.key, result.data.dashboardSummary] as const;
+    })).then((entries) => {
+      if (active) setSummaries(Object.fromEntries(entries));
+    }).catch(() => {
+      if (active) setError(true);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [client, itemsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openingBalances = useMemo(() => {
+    const balances: number[] = [];
+    let balance = summaries[items[0]?.key]?.totalBalance ?? 0;
+    items.forEach((projection, index) => {
+      balances[index] = balance;
+      const summary = summaries[projection.key];
+      if (!summary) return;
+      const income = (summary.futureIncomeAmount ?? 0) + (summary.recurrenceIncomeAmount ?? 0) + (summary.monthReceivable ?? 0) + Math.max(projection.impact, 0);
+      const out = (summary.pendingInvoicesAmount ?? 0) + (summary.futureExpensesAmount ?? 0) + (summary.recurrenceExpensesAmount ?? 0) + (summary.recurrenceCreditPendingAmount ?? 0) + Math.max(-projection.impact, 0);
+      balance = roundMoney(balance + income - out);
+    });
+    return balances;
+  }, [items, summaries]);
+
   if (!item) return null;
   return (
     <div className="space-y-3 lg:col-span-2">
@@ -113,7 +145,7 @@ function ProjectionTimeline({ items }: { items: Array<{ key: string; date: strin
       <div className="flex gap-2 overflow-x-auto pb-1">
         {items.map((month, index) => <button key={month.key} type="button" onClick={() => setSelected(index)} className={cn("shrink-0 rounded-lg border px-3 py-1.5 text-xs capitalize transition-colors", index === safeIndex ? "border-sky-500/50 bg-sky-500/10 text-sky-300" : "border-surface-border text-gray-500 hover:text-gray-300")}>{formatMonthYear(month.date.slice(0, 7))}</button>)}
       </div>
-      <MonthProjection key={item.key} date={item.date} impact={item.impact} />
+      <MonthProjection key={item.key} date={item.date} impact={item.impact} summary={summaries[item.key]} openingBalance={openingBalances[safeIndex]} loading={loading} error={error} />
     </div>
   );
 }
