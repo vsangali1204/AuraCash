@@ -327,7 +327,7 @@ export function InvoicesPage() {
           <p className="text-sm text-gray-500">Nenhum cartão cadastrado.</p>
         </Card>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-px-4">
           {cards.map((card) => {
             const isActive = card.id === effectiveCardId;
             // Mostra a fatura do mês selecionado, não necessariamente a vigente
@@ -342,7 +342,7 @@ export function InvoicesPage() {
                 key={card.id}
                 onClick={() => setSelectedCardId(card.id)}
                 className={cn(
-                  "flex w-56 shrink-0 flex-col gap-3 rounded-xl border p-4 text-left transition-all",
+                  "flex w-56 shrink-0 snap-start flex-col gap-3 rounded-xl border p-4 text-left transition-all",
                   isActive
                     ? "border-sky-500/40 bg-sky-500/10"
                     : "border-surface-border bg-surface-card hover:border-sky-500/20"
@@ -417,7 +417,7 @@ export function InvoicesPage() {
         <div className="space-y-4">
           {/* Info do cartão selecionado */}
           <div className="rounded-xl border border-surface-border bg-surface-card p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-600/20">
                   <CardIcon size={15} className="text-sky-400" />

@@ -413,52 +413,90 @@ export function ReportsPage() {
           ) : balanceHistory.length === 0 ? (
             <EmptyChart />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-surface-border">
-                    <th className="pb-2 text-left font-medium text-gray-500">Mês</th>
-                    <th className="pb-2 text-right font-medium text-gray-500">Receitas</th>
-                    <th className="pb-2 text-right font-medium text-gray-500">Despesas</th>
-                    <th className="pb-2 text-right font-medium text-gray-500">Resultado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-border">
-                  {[...balanceHistory].reverse().map((row) => {
-                    const net = row.income - row.expense;
-                    return (
-                      <tr key={row.month} className="hover:bg-surface-hover">
-                        <td className="py-2 text-gray-300">{formatMonthYear(row.month)}</td>
-                        <td className="py-2 text-right text-emerald-400">{formatCurrency(row.income)}</td>
-                        <td className="py-2 text-right text-red-400">{formatCurrency(row.expense)}</td>
-                        <td className={`py-2 text-right font-medium ${net >= 0 ? "text-sky-400" : "text-red-400"}`}>
+            <>
+              {/* Mobile: lista de cards — tabela de 4 colunas fica ilegível em telas estreitas */}
+              <div className="space-y-2 sm:hidden">
+                {[...balanceHistory].reverse().map((row) => {
+                  const net = row.income - row.expense;
+                  return (
+                    <div key={row.month} className="rounded-lg border border-surface-border p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium capitalize text-gray-200">{formatMonthYear(row.month)}</span>
+                        <span className={`text-sm font-bold tabular-nums ${net >= 0 ? "text-sky-400" : "text-red-400"}`}>
                           {net >= 0 ? "+" : ""}{formatCurrency(net)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 flex justify-between text-xs tabular-nums">
+                        <span className="text-emerald-400">+ {formatCurrency(row.income)}</span>
+                        <span className="text-red-400">− {formatCurrency(row.expense)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="rounded-lg bg-surface p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-300">Total</span>
+                    <span className={`text-sm font-bold tabular-nums ${
+                      balanceHistory.reduce((s, h) => s + h.income - h.expense, 0) >= 0 ? "text-sky-400" : "text-red-400"
+                    }`}>
+                      {formatCurrency(balanceHistory.reduce((s, h) => s + h.income - h.expense, 0))}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-xs tabular-nums">
+                    <span className="text-emerald-400">+ {formatCurrency(balanceHistory.reduce((s, h) => s + h.income, 0))}</span>
+                    <span className="text-red-400">− {formatCurrency(balanceHistory.reduce((s, h) => s + h.expense, 0))}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop: tabela completa */}
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-surface-border">
+                      <th className="pb-2 text-left font-medium text-gray-500">Mês</th>
+                      <th className="pb-2 text-right font-medium text-gray-500">Receitas</th>
+                      <th className="pb-2 text-right font-medium text-gray-500">Despesas</th>
+                      <th className="pb-2 text-right font-medium text-gray-500">Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-surface-border">
+                    {[...balanceHistory].reverse().map((row) => {
+                      const net = row.income - row.expense;
+                      return (
+                        <tr key={row.month} className="hover:bg-surface-hover">
+                          <td className="py-2 text-gray-300">{formatMonthYear(row.month)}</td>
+                          <td className="py-2 text-right text-emerald-400">{formatCurrency(row.income)}</td>
+                          <td className="py-2 text-right text-red-400">{formatCurrency(row.expense)}</td>
+                          <td className={`py-2 text-right font-medium ${net >= 0 ? "text-sky-400" : "text-red-400"}`}>
+                            {net >= 0 ? "+" : ""}{formatCurrency(net)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {balanceHistory.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t border-surface-border font-semibold">
+                        <td className="pt-2 text-gray-400">Total</td>
+                        <td className="pt-2 text-right text-emerald-400">
+                          {formatCurrency(balanceHistory.reduce((s, h) => s + h.income, 0))}
+                        </td>
+                        <td className="pt-2 text-right text-red-400">
+                          {formatCurrency(balanceHistory.reduce((s, h) => s + h.expense, 0))}
+                        </td>
+                        <td className={`pt-2 text-right ${
+                          balanceHistory.reduce((s, h) => s + h.income - h.expense, 0) >= 0
+                            ? "text-sky-400" : "text-red-400"
+                        }`}>
+                          {formatCurrency(balanceHistory.reduce((s, h) => s + h.income - h.expense, 0))}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-                {balanceHistory.length > 0 && (
-                  <tfoot>
-                    <tr className="border-t border-surface-border font-semibold">
-                      <td className="pt-2 text-gray-400">Total</td>
-                      <td className="pt-2 text-right text-emerald-400">
-                        {formatCurrency(balanceHistory.reduce((s, h) => s + h.income, 0))}
-                      </td>
-                      <td className="pt-2 text-right text-red-400">
-                        {formatCurrency(balanceHistory.reduce((s, h) => s + h.expense, 0))}
-                      </td>
-                      <td className={`pt-2 text-right ${
-                        balanceHistory.reduce((s, h) => s + h.income - h.expense, 0) >= 0
-                          ? "text-sky-400" : "text-red-400"
-                      }`}>
-                        {formatCurrency(balanceHistory.reduce((s, h) => s + h.income - h.expense, 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </>
           )}
         </Card>
       </div>
@@ -512,7 +550,28 @@ export function ReportsPage() {
                 </BarChart>
               </ResponsiveContainer>
 
-              <div className="mt-4 overflow-x-auto">
+              {/* Mobile: lista de cards — tabela de 5 colunas fica ilegível em telas estreitas */}
+              <div className="mt-4 space-y-2 sm:hidden">
+                {[...invoices].reverse().slice(0, 12).map((inv) => (
+                  <div key={inv.id} className="rounded-lg border border-surface-border p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium capitalize text-gray-200">{formatMonthYear(inv.referenceMonth)}</span>
+                      <InvoiceStatusBadge status={inv.status} />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between text-xs text-gray-500">
+                      <span>Vence {inv.dueDate ? new Date(inv.dueDate + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</span>
+                      <span className="tabular-nums">
+                        <span className="text-white font-medium">{formatCurrency(inv.totalAmount)}</span>
+                        {" · "}
+                        <span className="text-emerald-400">{formatCurrency(inv.paidAmount)} pago</span>
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: tabela completa */}
+              <div className="mt-4 hidden overflow-x-auto sm:block">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-surface-border">

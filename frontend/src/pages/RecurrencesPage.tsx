@@ -213,17 +213,17 @@ export function RecurrencesPage() {
             {allRecurrences.filter((r) => r.isActive).length} ativa(s) de {allRecurrences.length} total
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col gap-2 w-full sm:flex-row sm:w-auto">
           <Button
             variant="secondary"
             onClick={() => processRec()}
             loading={processing}
-            className="flex-1 sm:flex-none"
+            className="w-full sm:w-auto"
             title="Gera os lançamentos pendentes do mês atual para todas as recorrências ativas"
           >
             <Zap size={16} /> Processar agora
           </Button>
-          <Button onClick={openCreate} className="flex-1 sm:flex-none"><Plus size={16} /> Nova recorrência</Button>
+          <Button onClick={openCreate} className="w-full sm:w-auto"><Plus size={16} /> Nova recorrência</Button>
         </div>
       </div>
 
@@ -249,7 +249,7 @@ export function RecurrencesPage() {
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {recurrences.map((rec) => (
             <div key={rec.id} className={`rounded-xl border bg-surface-card p-4 transition-colors ${rec.isActive ? "border-surface-border" : "border-surface-border opacity-60"}`}>
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${rec.recurrenceType === "income" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
                     <RefreshCw size={16} />
@@ -262,7 +262,7 @@ export function RecurrencesPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
                   <button
                     onClick={() => reprocessRec({ variables: { id: rec.id } })}
                     disabled={reprocessing}

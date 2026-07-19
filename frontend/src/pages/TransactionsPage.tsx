@@ -392,7 +392,7 @@ export function TransactionsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar lançamentos..."
-              className="h-9 w-full rounded-lg border border-surface-border bg-surface pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:border-sky-500 focus:outline-none"
+              className="h-9 w-full rounded-lg border border-surface-border bg-surface pl-9 pr-3 text-base sm:text-sm text-white placeholder:text-gray-500 focus:border-sky-500 focus:outline-none"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
