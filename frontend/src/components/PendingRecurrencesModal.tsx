@@ -137,7 +137,7 @@ export function PendingRecurrencesModal({ transactions, isOpen, onClose, dashboa
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 mt-2.5">
+                <div className="flex flex-wrap items-center justify-end gap-2 mt-2.5">
                   {isEditing && (
                     <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
                       Cancelar

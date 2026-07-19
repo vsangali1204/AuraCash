@@ -561,7 +561,7 @@ function SummaryCard({
     <Card interactive>
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-gray-500 truncate">{label}</p>
+          <p className="text-xs font-medium leading-snug text-gray-500">{label}</p>
           {value === null ? (
             <Skeleton className="mt-2 h-6 w-24" />
           ) : (

@@ -38,7 +38,7 @@ export function InvoiceTimeline({ months, selectedYm, onSelect }: InvoiceTimelin
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="overflow-x-auto pb-1 snap-x snap-mandatory scroll-px-4">
       <div className="relative" style={{ width: totalWidth, height: CHART_HEIGHT }}>
         <svg
           className="pointer-events-none absolute inset-0"
@@ -69,7 +69,7 @@ export function InvoiceTimeline({ months, selectedYm, onSelect }: InvoiceTimelin
               onClick={() => onSelect(m.ym)}
               style={{ width: ITEM_WIDTH }}
               className={cn(
-                "shrink-0 rounded-xl border px-2 py-2.5 text-center transition-all",
+                "shrink-0 snap-start rounded-xl border px-2 py-2.5 text-center transition-all",
                 isSelected
                   ? "border-sky-500/50 bg-sky-500/10"
                   : "border-surface-border bg-surface-card hover:border-sky-500/20"
