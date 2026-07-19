@@ -740,13 +740,13 @@ export function ReceivablesPage() {
 
       {/* Tabs de período com scroll horizontal */}
       <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory scroll-px-4">
           {PERIOD_TABS.map((tab) => (
             <button
               key={tab.value}
               onClick={() => changePeriod(tab.value)}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                "flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                 period === tab.value
                   ? "bg-sky-600 text-white"
                   : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
