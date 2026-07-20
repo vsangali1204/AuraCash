@@ -371,6 +371,11 @@ export function ReceivablesPage() {
   // allDebtorsForPdf reutiliza o mesmo agrupamento já computado por groupedByPerson
   const allDebtorsForPdf = groupedByPerson;
 
+  const currentPeriodLabel = useMemo(
+    () => PERIOD_TABS.find((t) => t.value === period)?.label ?? "Todos",
+    [period]
+  );
+
   const pendingIds = filteredTransactions.map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
 
@@ -667,10 +672,8 @@ export function ReceivablesPage() {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
       });
-      const periodLabel = PERIOD_TABS.find((t) => t.value === period)?.label ?? "Todos";
-
       const { downloadReceivablesPDF } = await import("@/components/reports/ReceivablesPDFReport");
-      await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand, periodLabel });
+      await downloadReceivablesPDF({ debtors, categoryTotals, generatedAt, totalGrand, periodLabel: currentPeriodLabel });
       setPdfModalOpen(false);
     } catch {
       toast.error("Erro ao gerar PDF. Tente novamente.");
@@ -1120,7 +1123,7 @@ export function ReceivablesPage() {
           <div className="flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/8 px-3 py-2">
             <Calendar size={13} className="text-sky-400 shrink-0" />
             <p className="text-xs text-sky-300">
-              Período: <span className="font-semibold">{PERIOD_TABS.find((t) => t.value === period)?.label}</span>
+              Período: <span className="font-semibold">{currentPeriodLabel}</span>
               {debtorFilter && <span className="text-sky-400/70"> · filtro "{debtorFilter}"</span>}
             </p>
           </div>

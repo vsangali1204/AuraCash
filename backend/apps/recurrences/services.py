@@ -76,12 +76,8 @@ def process_due_recurrences(user=None, today: date | None = None) -> int:
         qs = qs.filter(user=user)
 
     for rec in qs:
-        exec_date = rec.get_execution_date(today.year, today.month)
+        exec_date = rec.get_execution_date_in_range(today.year, today.month)
         if not exec_date or exec_date > today:
-            continue
-        if exec_date < rec.start_date:
-            continue
-        if rec.end_date is not None and exec_date > rec.end_date:
             continue
 
         # Lock na recorrência serializa workers concorrentes e evita duplicatas

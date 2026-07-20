@@ -41,11 +41,12 @@ def map_recurrence(rec: Recurrence) -> RecurrenceType:
 
     next_exec = None
     for _ in range(25):  # varre até 25 meses à frente
-        candidate = rec.get_execution_date(year, month)
+        # Se o início do mês já passou do end_date, encerra
+        if rec.end_date is not None and date(year, month, 1) > rec.end_date:
+            break
+        candidate = rec.get_execution_date_in_range(year, month)
         if candidate is not None and candidate >= search_from:
-            if rec.end_date is None or candidate <= rec.end_date:
-                next_exec = candidate
-            # se candidate > end_date, a recorrência encerrou: next_exec fica None
+            next_exec = candidate
             break
         if month == 12:
             year, month = year + 1, 1
@@ -281,7 +282,7 @@ class RecurrenceMutation:
             is_pending_recurrence=True,
         ).delete()
 
-        exec_date = rec.get_execution_date(today.year, today.month)
+        exec_date = rec.get_execution_date_in_range(today.year, today.month)
         if not exec_date:
             return 0
 

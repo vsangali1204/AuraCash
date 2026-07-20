@@ -463,12 +463,8 @@ class TransactionQuery:
         def _unprocessed_recurrences(rtype: str) -> Decimal:
             total = Decimal("0")
             for rec in Recurrence.objects.filter(user=user, is_active=True, recurrence_type=rtype).exclude(payment_method="credit"):
-                exec_date = rec.get_execution_date(year, month)
+                exec_date = rec.get_execution_date_in_range(year, month)
                 if not exec_date:
-                    continue
-                if exec_date < rec.start_date:
-                    continue
-                if rec.end_date is not None and exec_date > rec.end_date:
                     continue
                 already = Transaction.objects.filter(
                     recurrence=rec, date__year=year, date__month=month
@@ -532,12 +528,8 @@ class TransactionQuery:
             ).select_related("credit_card")
             for rec in credit_recs:
                 for check_year, check_month in _recent_months(year, month):
-                    exec_date = rec.get_execution_date(check_year, check_month)
+                    exec_date = rec.get_execution_date_in_range(check_year, check_month)
                     if not exec_date:
-                        continue
-                    if exec_date < rec.start_date:
-                        continue
-                    if rec.end_date is not None and exec_date > rec.end_date:
                         continue
                     already = Transaction.objects.filter(
                         recurrence=rec, date__year=check_year, date__month=check_month
@@ -751,12 +743,8 @@ class TransactionQuery:
 
         recurrences = Recurrence.objects.filter(user=user, is_active=True)
         for rec in recurrences:
-            exec_date = rec.get_execution_date(year, month)
+            exec_date = rec.get_execution_date_in_range(year, month)
             if exec_date:
-                if exec_date < rec.start_date:
-                    continue
-                if rec.end_date is not None and exec_date > rec.end_date:
-                    continue
                 color = "#10b981" if rec.recurrence_type == "income" else "#8b5cf6"
                 events.append(CalendarEvent(
                     date=exec_date,

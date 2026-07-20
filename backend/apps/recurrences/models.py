@@ -90,3 +90,15 @@ class Recurrence(models.Model):
             if dt.weekday() < 5:
                 return dt
         return None
+
+    def get_execution_date_in_range(self, year: int, month: int) -> date | None:
+        """Mesmo que get_execution_date, mas retorna None se a data cair fora
+        do intervalo [start_date, end_date] da recorrência."""
+        d = self.get_execution_date(year, month)
+        if d is None:
+            return None
+        if d < self.start_date:
+            return None
+        if self.end_date is not None and d > self.end_date:
+            return None
+        return d
