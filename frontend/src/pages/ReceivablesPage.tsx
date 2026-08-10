@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useLazyQuery } from "@apollo/client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
 import type { UseFormReturn } from "react-hook-form";
@@ -282,11 +282,15 @@ function BulkReceiveForm({
 type FilterMode = "months" | "overdue" | "all";
 
 export function ReceivablesPage() {
-  const monthTabs = buildMonthTabs(MONTHS_AHEAD);
+  const monthTabs = useMemo(() => buildMonthTabs(MONTHS_AHEAD), []);
   const thisMonthKey = monthTabs[0].value;
   const nextMonthKey = monthTabs[1].value;
 
   const [period, setPeriod] = useState<Period>(thisMonthKey);
+  // Enquanto true, o efeito abaixo pode pular sozinho pro próximo mês com
+  // pendência (ex.: agosto já foi todo recebido) — desliga assim que o
+  // usuário navega manualmente, pra nunca brigar com a escolha dele.
+  const autoSeekRef = useRef(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [debtorFilter, setDebtorFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -352,6 +356,24 @@ export function ReceivablesPage() {
     if (filterMode !== "months") changePeriod(thisMonthKey);
   }
 
+  // Ao carregar, se o mês corrente já estiver zerado (ex.: agosto já foi
+  // todo recebido), pula sozinho pro próximo mês com algo pendente — sem
+  // brigar com uma navegação manual do usuário (ver changePeriod/autoSeekRef).
+  useEffect(() => {
+    if (!autoSeekRef.current || filterMode !== "months" || loading) return;
+    if (transactions.length > 0) {
+      autoSeekRef.current = false;
+      return;
+    }
+    const idx = monthTabs.findIndex((m) => m.value === period);
+    if (idx === -1 || idx >= monthTabs.length - 1) {
+      autoSeekRef.current = false;
+      if (period !== thisMonthKey) setPeriod(thisMonthKey);
+      return;
+    }
+    setPeriod(monthTabs[idx + 1].value);
+  }, [loading, transactions, period, filterMode, monthTabs, thisMonthKey]);
+
   const filteredTransactions = useMemo(() => {
     if (!debtorFilter.trim()) return transactions;
     const q = debtorFilter.toLowerCase();
@@ -415,6 +437,7 @@ export function ReceivablesPage() {
   }
 
   function changePeriod(p: Period) {
+    autoSeekRef.current = false;
     setPeriod(p);
     setSelected(new Set());
   }
