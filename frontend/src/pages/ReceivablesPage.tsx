@@ -6,8 +6,8 @@ import type { UseFormReturn } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
-  Clock, Calendar, ChevronDown, ChevronUp, List,
-  UserCheck, Search, X, TrendingDown, TrendingUp, FileDown, Zap,
+  Clock, Calendar, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, List,
+  UserCheck, Search, X, TrendingUp, FileDown, Zap,
 } from "lucide-react";
 import type {
   DebtorGroup,
@@ -279,15 +279,12 @@ function BulkReceiveForm({
   );
 }
 
+type FilterMode = "months" | "overdue" | "all";
+
 export function ReceivablesPage() {
   const monthTabs = buildMonthTabs(MONTHS_AHEAD);
   const thisMonthKey = monthTabs[0].value;
   const nextMonthKey = monthTabs[1].value;
-  const PERIOD_TABS: { value: Period; label: string; icon: React.ReactNode }[] = [
-    { value: "overdue", label: "Atrasados", icon: <AlertCircle size={13} /> },
-    ...monthTabs.map((m) => ({ value: m.value, label: m.label, icon: <Calendar size={13} /> })),
-    { value: "all", label: "Todos", icon: <Users size={13} /> },
-  ];
 
   const [period, setPeriod] = useState<Period>(thisMonthKey);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -311,17 +308,6 @@ export function ReceivablesPage() {
   const { data: summaryData } = useQuery<{ receivableTransactions: Transaction[] }>(
     RECEIVABLE_TRANSACTIONS_QUERY,
     { variables: { period: null }, fetchPolicy: "cache-and-network" }
-  );
-
-  // Consultas dedicadas para os cards "Este mês"/"Próx. mês": incluem previsões
-  // de recorrências de cobrança que ainda não geraram o lançamento real.
-  const { data: thisMonthData } = useQuery<{ receivableTransactions: Transaction[] }>(
-    RECEIVABLE_TRANSACTIONS_QUERY,
-    { variables: { period: thisMonthKey }, fetchPolicy: "cache-and-network" }
-  );
-  const { data: nextMonthData } = useQuery<{ receivableTransactions: Transaction[] }>(
-    RECEIVABLE_TRANSACTIONS_QUERY,
-    { variables: { period: nextMonthKey }, fetchPolicy: "cache-and-network" }
   );
 
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
@@ -349,12 +335,22 @@ export function ReceivablesPage() {
     return tx.competenceDate < todayISO();
   }
 
-  const thisMonthTxs   = thisMonthData?.receivableTransactions ?? [];
-  const nextMonthTxs   = nextMonthData?.receivableTransactions ?? [];
-  const totalPending   = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
-  const overdueTotal   = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
-  const thisMonthTotal = thisMonthTxs.reduce((s, t) => s + t.remainingAmount, 0);
-  const nextMonthTotal = nextMonthTxs.reduce((s, t) => s + t.remainingAmount, 0);
+  const totalPending = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
+  const overdueTotal = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
+
+  // O modo/mês atual é derivado direto de `period`, e a lista/total em
+  // destaque vêm de `filteredTransactions` — então o card nunca fica
+  // dessincronizado do que está sendo mostrado (nem do filtro de busca).
+  const filterMode: FilterMode = period === "overdue" ? "overdue" : period === "all" ? "all" : "months";
+  const monthIdx = Math.max(0, monthTabs.findIndex((m) => m.value === period));
+  const currentPeriodLabel =
+    filterMode === "overdue" ? "Atrasados"
+    : filterMode === "all" ? "Todos"
+    : monthTabs[monthIdx].label;
+
+  function selectMonthsMode() {
+    if (filterMode !== "months") changePeriod(thisMonthKey);
+  }
 
   const filteredTransactions = useMemo(() => {
     if (!debtorFilter.trim()) return transactions;
@@ -363,6 +359,8 @@ export function ReceivablesPage() {
       (tx) => tx.debtorName?.toLowerCase().includes(q) || tx.description.toLowerCase().includes(q)
     );
   }, [transactions, debtorFilter]);
+
+  const selectedTotal = filteredTransactions.reduce((s, t) => s + t.remainingAmount, 0);
 
   const groupedByPerson = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -382,11 +380,6 @@ export function ReceivablesPage() {
 
   // allDebtorsForPdf reutiliza o mesmo agrupamento já computado por groupedByPerson
   const allDebtorsForPdf = groupedByPerson;
-
-  const currentPeriodLabel = useMemo(
-    () => PERIOD_TABS.find((t) => t.value === period)?.label ?? "Todos",
-    [period]
-  );
 
   // Itens previstos (isProjected) não têm um lançamento real: não podem ser
   // selecionados nem recebidos até a recorrência gerar o lançamento de fato.
@@ -429,8 +422,6 @@ export function ReceivablesPage() {
   const refetchVars = [
     { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: period === "all" ? null : period } },
     { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: null } },
-    { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: thisMonthKey } },
-    { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: nextMonthKey } },
     { query: RECEIVABLE_SUMMARY_QUERY },
     { query: ACCOUNTS_QUERY },
   ];
@@ -768,69 +759,103 @@ export function ReceivablesPage() {
         </Button>
       </div>
 
-      {/* Cards de resumo — 2×2 clicáveis */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {[
-          { label: "Este mês",  value: thisMonthTotal, period: thisMonthKey, color: "blue",  Icon: Clock },
-          { label: "Próx. mês", value: nextMonthTotal, period: nextMonthKey, color: "sky",   Icon: Calendar },
-          { label: "Atrasados", value: overdueTotal,   period: "overdue",    color: "red",   Icon: TrendingDown },
-          { label: "Total",     value: totalPending,   period: "all",        color: "amber", Icon: Users },
-        ].map((card) => (
-          <button
-            key={card.period}
-            onClick={() => changePeriod(card.period)}
-            className={cn(
-              "rounded-xl border p-3 text-left transition-all",
-              period === card.period
-                ? card.color === "red"   ? "border-red-500/40 bg-red-500/10"
-                : card.color === "sky"   ? "border-sky-500/40 bg-sky-500/10"
-                : card.color === "blue"  ? "border-blue-500/40 bg-blue-500/10"
-                : "border-amber-500/40 bg-amber-500/10"
-                : "border-surface-border bg-surface-card hover:border-surface-hover"
-            )}
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <card.Icon size={12} className={
-                card.color === "red" ? "text-red-400"
-                : card.color === "sky" ? "text-sky-400"
-                : card.color === "blue" ? "text-blue-400"
-                : "text-amber-400"
-              } />
-              <p className="text-[11px] font-medium text-gray-500">{card.label}</p>
-            </div>
-            <p className={cn(
-              "text-base font-bold tabular-nums",
-              card.color === "red" && card.value > 0 ? "text-red-400"
-              : card.color === "sky" ? "text-sky-400"
-              : card.color === "blue" ? "text-blue-400"
-              : "text-amber-400"
-            )}>
-              {formatCurrency(card.value)}
-            </p>
-          </button>
-        ))}
+      {/* Aviso de atrasados — sempre visível, independente do filtro atual */}
+      {overdueTotal > 0 && filterMode !== "overdue" && (
+        <button
+          onClick={() => changePeriod("overdue")}
+          className="flex w-full items-center justify-between gap-2 rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2 text-left transition-colors hover:bg-red-500/10"
+        >
+          <span className="flex items-center gap-2 text-xs font-medium text-red-300">
+            <AlertCircle size={13} /> Você tem valores atrasados
+          </span>
+          <span className="text-xs font-semibold text-red-400">{formatCurrency(overdueTotal)} →</span>
+        </button>
+      )}
+
+      {/* Modo de filtro: Meses / Atrasados / Todos */}
+      <div className="grid grid-cols-3 gap-1 rounded-lg border border-surface-border bg-surface-card p-1">
+        <button
+          onClick={selectMonthsMode}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition-colors",
+            filterMode === "months" ? "bg-sky-600 text-white" : "text-gray-400 hover:text-white"
+          )}
+        >
+          <Calendar size={14} /> Meses
+        </button>
+        <button
+          onClick={() => changePeriod("overdue")}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition-colors",
+            filterMode === "overdue" ? "bg-red-600 text-white" : "text-gray-400 hover:text-white"
+          )}
+        >
+          <AlertCircle size={14} /> Atrasados
+        </button>
+        <button
+          onClick={() => changePeriod("all")}
+          className={cn(
+            "flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm font-medium transition-colors",
+            filterMode === "all" ? "bg-amber-600 text-white" : "text-gray-400 hover:text-white"
+          )}
+        >
+          <Users size={14} /> Todos
+        </button>
       </div>
 
-      {/* Tabs de período com scroll horizontal */}
-      <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none snap-x snap-mandatory scroll-px-4">
-          {PERIOD_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => changePeriod(tab.value)}
-              className={cn(
-                "flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                period === tab.value
-                  ? "bg-sky-600 text-white"
-                  : "border border-surface-border bg-surface-card text-gray-400 hover:text-white"
-              )}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+      {/* Navegador de mês — só aparece no modo "Meses" */}
+      {filterMode === "months" && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-surface-border bg-surface-card px-2 py-2">
+          <button
+            aria-label="Mês anterior"
+            disabled={monthIdx === 0}
+            onClick={() => changePeriod(monthTabs[monthIdx - 1].value)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:text-white disabled:opacity-30 disabled:hover:text-gray-400"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-semibold capitalize text-white">
+            {monthTabs[monthIdx].label}
+            {monthIdx === 0 && <span className="ml-1.5 text-[11px] font-normal text-sky-400">(atual)</span>}
+          </span>
+          <button
+            aria-label="Próximo mês"
+            disabled={monthIdx === monthTabs.length - 1}
+            onClick={() => changePeriod(monthTabs[monthIdx + 1].value)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:text-white disabled:opacity-30 disabled:hover:text-gray-400"
+          >
+            <ChevronRight size={18} />
+          </button>
         </div>
-      </div>
+      )}
+
+      {/* Total do filtro selecionado — sempre reflete o que está sendo exibido abaixo */}
+      <Card
+        className={cn(
+          "flex items-center justify-between gap-3",
+          filterMode === "overdue" ? "border-red-500/30 bg-red-500/5"
+          : filterMode === "all" ? "border-amber-500/30 bg-amber-500/5"
+          : "border-sky-500/30 bg-sky-500/5"
+        )}
+      >
+        <div className="min-w-0">
+          <p className="text-xs text-gray-500">
+            {filterMode === "months" ? "Previsto para" : "Mostrando"}
+          </p>
+          <p className="truncate text-sm font-semibold capitalize text-white">{currentPeriodLabel}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{filteredTransactions.length} lançamento(s)</p>
+        </div>
+        <p
+          className={cn(
+            "shrink-0 text-xl font-bold tabular-nums",
+            filterMode === "overdue" ? "text-red-400"
+            : filterMode === "all" ? "text-amber-400"
+            : "text-sky-400"
+          )}
+        >
+          {formatCurrency(selectedTotal)}
+        </p>
+      </Card>
 
       {/* Barra de busca + toggle de visualização */}
       <div className="flex gap-2">
