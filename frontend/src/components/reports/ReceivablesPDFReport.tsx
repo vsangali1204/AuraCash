@@ -105,6 +105,7 @@ const s = StyleSheet.create({
   trowAlt: { backgroundColor: '#fafafa' },
   trowPartial: { backgroundColor: '#fffbeb' },
   trowRemainder: { backgroundColor: '#eef2ff' },
+  trowProjected: { backgroundColor: '#f0f9ff' },
   td: { fontSize: 8, color: '#334155' },
   tdBold: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#1e293b' },
   tdSub: { fontSize: 7, color: '#94a3b8', marginTop: 1 },
@@ -141,6 +142,14 @@ const s = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bRemainderText: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#3730a3' },
+  bProjected: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  bProjectedText: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: '#0369a1' },
 
   // Subtotal
   stRow: {
@@ -246,12 +255,13 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                 {debtor.transactions.map((tx, i) => {
                   const isPartial = tx.receiptStatus === 'partial';
                   const isRemainder = !!tx.isPartialRemainder;
+                  const isProjected = !!tx.isProjected;
                   return (
                     <View
                       key={tx.id}
                       style={[
                         s.trow,
-                        ...(isRemainder ? [s.trowRemainder] : i % 2 === 1 ? [s.trowAlt] : []),
+                        ...(isRemainder ? [s.trowRemainder] : isProjected ? [s.trowProjected] : i % 2 === 1 ? [s.trowAlt] : []),
                         ...(isPartial ? [s.trowPartial] : []),
                       ]}
                     >
@@ -263,6 +273,9 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                         )}
                         {isRemainder && (
                           <Text style={[s.tdSub, { color: '#3730a3' }]}>↩ saldo de pgto parcial</Text>
+                        )}
+                        {isProjected && (
+                          <Text style={[s.tdSub, { color: '#0369a1' }]}>previsto pela recorrência</Text>
                         )}
                       </View>
                       <Text style={[s.td, s.cMethod]}>
@@ -279,7 +292,11 @@ function ReportDoc({ debtors, categoryTotals, generatedAt, totalGrand, periodLab
                         )}
                       </View>
                       <View style={[s.cStatus, { alignItems: 'flex-start' }]}>
-                        {isRemainder ? (
+                        {isProjected ? (
+                          <View style={s.bProjected}>
+                            <Text style={s.bProjectedText}>PREVISTO</Text>
+                          </View>
+                        ) : isRemainder ? (
                           <View style={s.bRemainder}>
                             <Text style={s.bRemainderText}>SALDO</Text>
                           </View>

@@ -80,6 +80,7 @@ export interface Transaction {
   recurrence?: { id: string; description: string } | null;
   notes?: string | null;
   createdAt: string;
+  isProjected?: boolean;
 }
 
 export interface Recurrence {

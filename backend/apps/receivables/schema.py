@@ -8,7 +8,14 @@ from django.utils import timezone
 
 from shared.auth import require_auth
 from .models import Receipt
-from apps.transactions.schema import TransactionType, map_transaction
+from apps.accounts.schema import map_account
+from apps.categories.schema import map_category
+from apps.transactions.schema import (
+    CreditCardRefType,
+    RecurrenceRefType,
+    TransactionType,
+    map_transaction,
+)
 from apps.transactions.models import Transaction as TransactionModel
 
 
@@ -67,6 +74,97 @@ class BulkReceiveInput:
     total_amount: Optional[float] = None  # se informado, rateia proporcionalmente
 
 
+def _recent_months(year: int, month: int, back: int = 2) -> list[tuple[int, int]]:
+    """Retorna [ (year, month) ] dos `back` meses anteriores até o mês informado, em ordem crescente."""
+    out = []
+    for i in range(back, -1, -1):
+        mm, yy = month - i, year
+        while mm <= 0:
+            mm += 12
+            yy -= 1
+        out.append((yy, mm))
+    return out
+
+
+def _build_projected_transaction(rec, exec_date: date) -> TransactionType:
+    """Monta uma linha "prevista" (não salva no banco) para uma recorrência
+    marcada como cobrança que ainda não gerou o Transaction real do mês."""
+    credit_card_ref = None
+    if rec.credit_card_id:
+        credit_card_ref = CreditCardRefType(
+            id=strawberry.ID(str(rec.credit_card_id)),
+            name=rec.credit_card.name,
+            brand=rec.credit_card.brand,
+        )
+
+    return TransactionType(
+        id=strawberry.ID(f"proj-{rec.id}-{exec_date.isoformat()}"),
+        description=rec.description,
+        amount=round(float(rec.amount), 2),
+        transaction_type=rec.recurrence_type,
+        payment_method=rec.payment_method,
+        date=exec_date,
+        competence_date=exec_date,
+        account=map_account(rec.account, movement=0.0) if rec.account_id else None,
+        transfer_account=None,
+        credit_card=credit_card_ref,
+        invoice=None,
+        installment_number=None,
+        total_installments=None,
+        category=map_category(rec.category) if rec.category_id else None,
+        is_receivable=True,
+        debtor_name=rec.debtor_name,
+        receipt_status="pending",
+        received_amount=0.0,
+        remaining_amount=round(float(rec.amount), 2),
+        is_partial_remainder=False,
+        is_pending_recurrence=False,
+        recurrence=RecurrenceRefType(id=strawberry.ID(str(rec.id)), description=rec.description),
+        notes=None,
+        created_at=timezone.now(),
+        is_projected=True,
+    )
+
+
+def _projected_receivables(user, year: int, month: int) -> list[TransactionType]:
+    """Recorrências ativas marcadas como cobrança que ainda não geraram o
+    lançamento real deste mês — mostradas como previsão na tela de A Receber."""
+    from apps.recurrences.models import Recurrence
+    from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
+
+    recs = Recurrence.objects.filter(
+        user=user, is_active=True, is_receivable=True,
+    ).select_related("category", "credit_card", "account")
+
+    projected: list[TransactionType] = []
+    for rec in recs:
+        if rec.payment_method == "credit" and rec.credit_card_id:
+            # O gasto só "chega" quando a fatura vence — projeta pela fatura de destino.
+            for check_year, check_month in _recent_months(year, month):
+                exec_date = rec.get_execution_date_in_range(check_year, check_month)
+                if not exec_date:
+                    continue
+                already = TransactionModel.objects.filter(
+                    recurrence=rec, date__year=check_year, date__month=check_month
+                ).exists()
+                if already:
+                    continue
+                invoice_ref_month = get_first_invoice_month(rec.credit_card, exec_date)
+                invoice = get_or_create_invoice(rec.credit_card, invoice_ref_month)
+                if invoice.due_date.year == year and invoice.due_date.month == month:
+                    projected.append(_build_projected_transaction(rec, invoice.due_date))
+        else:
+            exec_date = rec.get_execution_date_in_range(year, month)
+            if not exec_date:
+                continue
+            already = TransactionModel.objects.filter(
+                recurrence=rec, date__year=year, date__month=month
+            ).exists()
+            if not already:
+                projected.append(_build_projected_transaction(rec, exec_date))
+    return projected
+
+
 @strawberry.type
 class ReceivableQuery:
     @strawberry.field
@@ -108,7 +206,7 @@ class ReceivableQuery:
         info: strawberry.types.Info,
         debtor_name: Optional[str] = None,
         status: Optional[str] = None,
-        period: Optional[str] = None,  # overdue | this_month | next_month | all
+        period: Optional[str] = None,  # overdue | all | "YYYY-MM" (aceita legado this_month/next_month)
     ) -> list[TransactionType]:
         user = require_auth(info)
         today = timezone.localdate()
@@ -126,17 +224,36 @@ class ReceivableQuery:
         if status:
             qs = qs.filter(receipt_status=status)
 
+        # Mês projetado (year, month) quando period aponta pra um mês específico
+        # atual ou futuro — usado para completar a lista com recorrências que
+        # ainda não geraram o lançamento real desse mês.
+        projected_month: Optional[tuple[int, int]] = None
+
         if period == "overdue":
             qs = qs.filter(competence_date__lt=today)
-        elif period == "this_month":
-            qs = qs.filter(competence_date__year=today.year, competence_date__month=today.month)
-        elif period == "next_month":
-            if today.month == 12:
-                qs = qs.filter(competence_date__year=today.year + 1, competence_date__month=1)
+        elif period and period != "all":
+            if period == "this_month":
+                year, month = today.year, today.month
+            elif period == "next_month":
+                year, month = (today.year + 1, 1) if today.month == 12 else (today.year, today.month + 1)
             else:
-                qs = qs.filter(competence_date__year=today.year, competence_date__month=today.month + 1)
+                try:
+                    year, month = (int(p) for p in period.split("-"))
+                except ValueError:
+                    year, month = today.year, today.month
+            qs = qs.filter(competence_date__year=year, competence_date__month=month)
+            if (year, month) >= (today.year, today.month):
+                projected_month = (year, month)
 
-        return [map_transaction(t) for t in qs]
+        results = [map_transaction(t) for t in qs]
+
+        if projected_month and not debtor_name and not status:
+            year, month = projected_month
+            for proj in _projected_receivables(user, year, month):
+                results.append(proj)
+
+        results.sort(key=lambda t: (t.competence_date or t.date, t.date))
+        return results
 
     @strawberry.field
     def receipts(

@@ -26,6 +26,7 @@ export const RECEIVABLE_TRANSACTIONS_QUERY = gql`
       receivedAmount
       remainingAmount
       isPartialRemainder
+      isProjected
       debtorName
       installmentNumber
       totalInstallments
@@ -48,6 +49,10 @@ export const RECEIVABLE_TRANSACTIONS_QUERY = gql`
         id
         name
         color
+      }
+      recurrence {
+        id
+        description
       }
     }
   }

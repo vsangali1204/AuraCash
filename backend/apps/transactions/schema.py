@@ -73,6 +73,7 @@ class TransactionType:
     recurrence: Optional[RecurrenceRefType]
     notes: Optional[str]
     created_at: datetime
+    is_projected: bool = False
 
 
 def map_transaction(t: Transaction) -> TransactionType:

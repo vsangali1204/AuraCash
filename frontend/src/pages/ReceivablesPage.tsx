@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import {
   DollarSign, Users, CheckSquare, Square, AlertCircle,
   Clock, Calendar, ChevronDown, ChevronUp, List,
-  UserCheck, Search, X, TrendingDown, TrendingUp, FileDown,
+  UserCheck, Search, X, TrendingDown, TrendingUp, FileDown, Zap,
 } from "lucide-react";
 import type {
   DebtorGroup,
@@ -29,8 +29,9 @@ import {
   RECEIPTS_QUERY,
 } from "@/graphql/queries/receivables";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
+import { REPROCESS_RECURRENCE_MUTATION } from "@/graphql/queries/recurrences";
 import {
-  cn, formatCurrency, formatDate,
+  cn, formatCurrency, formatDate, formatMonthYear, addMonths,
   RECEIPT_STATUS_LABELS, PAYMENT_METHOD_LABELS, todayISO,
 } from "@/lib/utils";
 import type { Account, Transaction, Receipt } from "@/types";
@@ -53,15 +54,19 @@ const bulkSchema = z.object({
 type ReceiptFormData = z.infer<typeof receiptSchema>;
 type BulkFormData = z.infer<typeof bulkSchema>;
 
-type Period = "next_month" | "this_month" | "overdue" | "all";
+type Period = string; // "overdue" | "all" | "YYYY-MM"
 type ViewMode = "list" | "by_person";
 
-const PERIOD_TABS: { value: Period; label: string; shortLabel: string; icon: React.ReactNode }[] = [
-  { value: "next_month", label: "Próximo mês",  shortLabel: "Próx. mês", icon: <Calendar size={13} /> },
-  { value: "this_month", label: "Este mês",     shortLabel: "Este mês",  icon: <Clock size={13} /> },
-  { value: "overdue",    label: "Atrasados",    shortLabel: "Atrasados", icon: <AlertCircle size={13} /> },
-  { value: "all",        label: "Todos",        shortLabel: "Todos",     icon: <Users size={13} /> },
-];
+const MONTHS_AHEAD = 6;
+
+/** Gera os próximos N meses (incluindo o atual) como tabs no formato "YYYY-MM". */
+function buildMonthTabs(count: number): { value: string; label: string }[] {
+  const base = todayISO();
+  return Array.from({ length: count }, (_, i) => {
+    const key = addMonths(base, i).slice(0, 7);
+    return { value: key, label: formatMonthYear(key) };
+  });
+}
 
 const NO_DEBTOR_KEY = "__sem_devedor__";
 
@@ -275,7 +280,16 @@ function BulkReceiveForm({
 }
 
 export function ReceivablesPage() {
-  const [period, setPeriod] = useState<Period>("next_month");
+  const monthTabs = buildMonthTabs(MONTHS_AHEAD);
+  const thisMonthKey = monthTabs[0].value;
+  const nextMonthKey = monthTabs[1].value;
+  const PERIOD_TABS: { value: Period; label: string; icon: React.ReactNode }[] = [
+    { value: "overdue", label: "Atrasados", icon: <AlertCircle size={13} /> },
+    ...monthTabs.map((m) => ({ value: m.value, label: m.label, icon: <Calendar size={13} /> })),
+    { value: "all", label: "Todos", icon: <Users size={13} /> },
+  ];
+
+  const [period, setPeriod] = useState<Period>(thisMonthKey);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [debtorFilter, setDebtorFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -299,6 +313,17 @@ export function ReceivablesPage() {
     { variables: { period: null }, fetchPolicy: "cache-and-network" }
   );
 
+  // Consultas dedicadas para os cards "Este mês"/"Próx. mês": incluem previsões
+  // de recorrências de cobrança que ainda não geraram o lançamento real.
+  const { data: thisMonthData } = useQuery<{ receivableTransactions: Transaction[] }>(
+    RECEIVABLE_TRANSACTIONS_QUERY,
+    { variables: { period: thisMonthKey }, fetchPolicy: "cache-and-network" }
+  );
+  const { data: nextMonthData } = useQuery<{ receivableTransactions: Transaction[] }>(
+    RECEIVABLE_TRANSACTIONS_QUERY,
+    { variables: { period: nextMonthKey }, fetchPolicy: "cache-and-network" }
+  );
+
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
 
   const [fetchReceipts, { data: receiptsData, loading: receiptsLoading }] =
@@ -314,35 +339,22 @@ export function ReceivablesPage() {
   const accounts = accountsData?.accounts ?? [];
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
 
-  const now = new Date();
-  const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
-  const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-
   function getNextMonthISO(): string {
     // Retorna o primeiro dia do próximo mês como data padrão de adiamento
-    const d = new Date(nextY, nextM - 1, 1);
-    return d.toISOString().split("T")[0];
+    return `${nextMonthKey}-01`;
   }
 
-  function isNextMonth(tx: Transaction) {
-    if (!tx.competenceDate) return false;
-    const [y, m] = tx.competenceDate.split("-").map(Number);
-    return y === nextY && m === nextM;
-  }
-  function isThisMonth(tx: Transaction) {
-    if (!tx.competenceDate) return false;
-    const [y, m] = tx.competenceDate.split("-").map(Number);
-    return y === now.getFullYear() && m === now.getMonth() + 1;
-  }
   function isOverdue(tx: Transaction) {
     if (!tx.competenceDate) return false;
     return tx.competenceDate < todayISO();
   }
 
-  const totalPending    = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
-  const nextMonthTotal  = allTxs.filter(isNextMonth).reduce((s, t) => s + t.remainingAmount, 0);
-  const thisMonthTotal  = allTxs.filter(isThisMonth).reduce((s, t) => s + t.remainingAmount, 0);
-  const overdueTotal    = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
+  const thisMonthTxs   = thisMonthData?.receivableTransactions ?? [];
+  const nextMonthTxs   = nextMonthData?.receivableTransactions ?? [];
+  const totalPending   = allTxs.reduce((s, t) => s + t.remainingAmount, 0);
+  const overdueTotal   = allTxs.filter(isOverdue).reduce((s, t) => s + t.remainingAmount, 0);
+  const thisMonthTotal = thisMonthTxs.reduce((s, t) => s + t.remainingAmount, 0);
+  const nextMonthTotal = nextMonthTxs.reduce((s, t) => s + t.remainingAmount, 0);
 
   const filteredTransactions = useMemo(() => {
     if (!debtorFilter.trim()) return transactions;
@@ -376,7 +388,9 @@ export function ReceivablesPage() {
     [period]
   );
 
-  const pendingIds = filteredTransactions.map((t) => t.id);
+  // Itens previstos (isProjected) não têm um lançamento real: não podem ser
+  // selecionados nem recebidos até a recorrência gerar o lançamento de fato.
+  const pendingIds = filteredTransactions.filter((t) => !t.isProjected).map((t) => t.id);
   const allSelected = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
 
   function toggleAll() {
@@ -392,8 +406,8 @@ export function ReceivablesPage() {
   }
 
   function togglePerson(key: string) {
-    const personTxs = groupedByPerson.get(key) ?? [];
-    const allPersonSelected = personTxs.every((tx) => selected.has(tx.id));
+    const personTxs = (groupedByPerson.get(key) ?? []).filter((tx) => !tx.isProjected);
+    const allPersonSelected = personTxs.length > 0 && personTxs.every((tx) => selected.has(tx.id));
     setSelected((prev) => {
       const next = new Set(prev);
       if (allPersonSelected) personTxs.forEach((tx) => next.delete(tx.id));
@@ -403,7 +417,7 @@ export function ReceivablesPage() {
   }
 
   function selectOnlyPerson(key: string) {
-    const personTxs = groupedByPerson.get(key) ?? [];
+    const personTxs = (groupedByPerson.get(key) ?? []).filter((tx) => !tx.isProjected);
     setSelected(new Set(personTxs.map((tx) => tx.id)));
   }
 
@@ -415,6 +429,8 @@ export function ReceivablesPage() {
   const refetchVars = [
     { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: period === "all" ? null : period } },
     { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: null } },
+    { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: thisMonthKey } },
+    { query: RECEIVABLE_TRANSACTIONS_QUERY, variables: { period: nextMonthKey } },
     { query: RECEIVABLE_SUMMARY_QUERY },
     { query: ACCOUNTS_QUERY },
   ];
@@ -435,6 +451,26 @@ export function ReceivablesPage() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const [generatingRecId, setGeneratingRecId] = useState<string | null>(null);
+
+  const [reprocessRec] = useMutation<{ reprocessRecurrence: number }>(REPROCESS_RECURRENCE_MUTATION, {
+    refetchQueries: refetchVars,
+    onCompleted: (d) => {
+      setGeneratingRecId(null);
+      if (d.reprocessRecurrence === 0) {
+        toast("Recorrência fora do dia de execução deste mês.", { icon: "ℹ️" });
+      } else {
+        toast.success("Lançamento gerado! Já pode registrar o recebimento.");
+      }
+    },
+    onError: (e) => { setGeneratingRecId(null); toast.error(e.message); },
+  });
+
+  function handleGenerateNow(recurrenceId: string) {
+    setGeneratingRecId(recurrenceId);
+    reprocessRec({ variables: { id: recurrenceId } });
+  }
 
   const receiptForm = useForm<ReceiptFormData>({
     resolver: zodResolver(receiptSchema),
@@ -515,25 +551,34 @@ export function ReceivablesPage() {
     const isOverdueItem = tx.competenceDate && tx.competenceDate < todayISO();
     const isPartial = tx.receivedAmount > 0;
     const isRemainder = !!tx.isPartialRemainder;
+    const isProjected = !!tx.isProjected;
 
     return (
       <div
         key={tx.id}
         className={cn(
           "group px-4 py-4 transition-colors",
-          isSelected ? "bg-sky-500/5" : "hover:bg-surface-hover/30"
+          isProjected
+            ? "border-l-2 border-dashed border-sky-500/30 bg-sky-500/[0.03]"
+            : isSelected ? "bg-sky-500/5" : "hover:bg-surface-hover/30"
         )}
       >
         <div className="flex gap-3">
           {/* Checkbox */}
-          <button
-            onClick={() => toggleOne(tx.id)}
-            className="mt-0.5 shrink-0 text-gray-500 hover:text-sky-400 transition-colors"
-          >
-            {isSelected
-              ? <CheckSquare size={18} className="text-sky-400" />
-              : <Square size={18} />}
-          </button>
+          {isProjected ? (
+            <span className="mt-0.5 shrink-0 text-sky-500/50" title="Previsão — ainda não gerado">
+              <Clock size={18} />
+            </span>
+          ) : (
+            <button
+              onClick={() => toggleOne(tx.id)}
+              className="mt-0.5 shrink-0 text-gray-500 hover:text-sky-400 transition-colors"
+            >
+              {isSelected
+                ? <CheckSquare size={18} className="text-sky-400" />
+                : <Square size={18} />}
+            </button>
+          )}
 
           <div className="flex-1 min-w-0 space-y-2">
             {/* Linha 1: descrição + valor */}
@@ -581,7 +626,11 @@ export function ReceivablesPage() {
                   ↩ saldo parcial
                 </Badge>
               )}
-              {tx.receiptStatus && (
+              {isProjected ? (
+                <Badge variant="neutral" className="border border-sky-500/30 bg-sky-500/10 text-sky-300">
+                  Previsto
+                </Badge>
+              ) : tx.receiptStatus && (
                 <Badge variant={tx.receiptStatus === "partial" ? "default" : "neutral"}>
                   {RECEIPT_STATUS_LABELS[tx.receiptStatus]}
                 </Badge>
@@ -613,27 +662,48 @@ export function ReceivablesPage() {
             )}
 
             {/* Linha 4: ações */}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => openReceipt(tx)}
-                className="flex-1 sm:flex-none"
-              >
-                <DollarSign size={13} />
-                {isPartial ? "Novo recebimento" : "Registrar recebimento"}
-              </Button>
-              {isPartial && (
+            {isProjected ? (
+              period === thisMonthKey && tx.recurrence ? (
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handleGenerateNow(tx.recurrence!.id)}
+                    disabled={generatingRecId === tx.recurrence!.id}
+                    className="flex-1 sm:flex-none"
+                  >
+                    <Zap size={13} />
+                    {generatingRecId === tx.recurrence!.id ? "Gerando…" : "Gerar lançamento"}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-600 italic">
+                  Previsão da recorrência — gerado automaticamente quando o dia chegar.
+                </p>
+              )
+            ) : (
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => openHistory(tx)}
+                  onClick={() => openReceipt(tx)}
                   className="flex-1 sm:flex-none"
                 >
-                  Histórico
+                  <DollarSign size={13} />
+                  {isPartial ? "Novo recebimento" : "Registrar recebimento"}
                 </Button>
-              )}
-            </div>
+                {isPartial && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => openHistory(tx)}
+                    className="flex-1 sm:flex-none"
+                  >
+                    Histórico
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -700,12 +770,12 @@ export function ReceivablesPage() {
 
       {/* Cards de resumo — 2×2 clicáveis */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        {([
-          { label: "Próx. mês", value: nextMonthTotal, period: "next_month" as Period, color: "sky",   Icon: Calendar },
-          { label: "Este mês",  value: thisMonthTotal, period: "this_month" as Period, color: "blue",  Icon: Clock },
-          { label: "Atrasados", value: overdueTotal,   period: "overdue" as Period,    color: "red",   Icon: TrendingDown },
-          { label: "Total",     value: totalPending,   period: "all" as Period,        color: "amber", Icon: Users },
-        ] as const).map((card) => (
+        {[
+          { label: "Este mês",  value: thisMonthTotal, period: thisMonthKey, color: "blue",  Icon: Clock },
+          { label: "Próx. mês", value: nextMonthTotal, period: nextMonthKey, color: "sky",   Icon: Calendar },
+          { label: "Atrasados", value: overdueTotal,   period: "overdue",    color: "red",   Icon: TrendingDown },
+          { label: "Total",     value: totalPending,   period: "all",        color: "amber", Icon: Users },
+        ].map((card) => (
           <button
             key={card.period}
             onClick={() => changePeriod(card.period)}
@@ -756,8 +826,7 @@ export function ReceivablesPage() {
               )}
             >
               {tab.icon}
-              <span className="hidden xs:inline">{tab.label}</span>
-              <span className="xs:hidden">{tab.shortLabel}</span>
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
@@ -844,9 +913,8 @@ export function ReceivablesPage() {
               {debtorFilter
                 ? `Nenhum resultado para "${debtorFilter}".`
                 : period === "overdue" ? "Nenhum valor atrasado."
-                : period === "next_month" ? "Nenhum valor previsto para o próximo mês."
-                : period === "this_month" ? "Nenhum valor previsto para este mês."
-                : "Nenhum valor a receber pendente."}
+                : period === "all" ? "Nenhum valor a receber pendente."
+                : `Nenhum valor previsto para ${currentPeriodLabel}.`}
             </p>
           </Card>
         ) : (
@@ -889,8 +957,9 @@ export function ReceivablesPage() {
               const personLabel = key === NO_DEBTOR_KEY ? "Sem devedor" : key;
               const personPending = txs.reduce((s, t) => s + t.remainingAmount, 0);
               const personTotal = txs.reduce((s, t) => s + t.amount, 0);
-              const personSelected = txs.every((tx) => selected.has(tx.id));
-              const personPartial = txs.some((tx) => selected.has(tx.id)) && !personSelected;
+              const personRealTxs = txs.filter((tx) => !tx.isProjected);
+              const personSelected = personRealTxs.length > 0 && personRealTxs.every((tx) => selected.has(tx.id));
+              const personPartial = personRealTxs.some((tx) => selected.has(tx.id)) && !personSelected;
               const isExpanded = expandedPerson === key;
               const paidPct = personTotal > 0 ? Math.min(100, ((personTotal - personPending) / personTotal) * 100) : 0;
 
@@ -950,7 +1019,7 @@ export function ReceivablesPage() {
                   </button>
 
                   {/* Ações da pessoa (sempre visíveis no collapsed) */}
-                  {!isExpanded && (
+                  {!isExpanded && personRealTxs.length > 0 && (
                     <div className="px-4 pb-3 flex gap-2">
                       <Button
                         size="sm"
@@ -969,15 +1038,17 @@ export function ReceivablesPage() {
                       <div className="border-t border-surface-border divide-y divide-surface-border/60">
                         {txs.map(renderTxRow)}
                       </div>
-                      <div className="border-t border-surface-border px-4 py-3">
-                        <Button
-                          size="sm"
-                          onClick={() => openBulkForPerson(key)}
-                          className="w-full"
-                        >
-                          <DollarSign size={13} /> Receber todos de {personLabel}
-                        </Button>
-                      </div>
+                      {personRealTxs.length > 0 && (
+                        <div className="border-t border-surface-border px-4 py-3">
+                          <Button
+                            size="sm"
+                            onClick={() => openBulkForPerson(key)}
+                            className="w-full"
+                          >
+                            <DollarSign size={13} /> Receber todos de {personLabel}
+                          </Button>
+                        </div>
+                      )}
                     </>
                   )}
                 </Card>
