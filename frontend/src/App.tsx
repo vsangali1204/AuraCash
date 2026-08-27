@@ -19,6 +19,7 @@ const TransactionsPage = lazy(() => import("@/pages/TransactionsPage").then(m =>
 const CreditCardsPage = lazy(() => import("@/pages/CreditCardsPage").then(m => ({ default: m.CreditCardsPage })));
 const InvoicesPage    = lazy(() => import("@/pages/InvoicesPage").then(m => ({ default: m.InvoicesPage })));
 const RecurrencesPage = lazy(() => import("@/pages/RecurrencesPage").then(m => ({ default: m.RecurrencesPage })));
+const GoalsPage       = lazy(() => import("@/pages/GoalsPage").then(m => ({ default: m.GoalsPage })));
 const ReceivablesPage = lazy(() => import("@/pages/ReceivablesPage").then(m => ({ default: m.ReceivablesPage })));
 const CalendarPage    = lazy(() => import("@/pages/CalendarPage").then(m => ({ default: m.CalendarPage })));
 const ReportsPage     = lazy(() => import("@/pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
@@ -93,6 +94,7 @@ export default function App() {
               <Route path="/invoices"     element={<InvoicesPage />} />
               <Route path="/recurrences"  element={<RecurrencesPage />} />
               <Route path="/receivables"  element={<ReceivablesPage />} />
+              <Route path="/goals"        element={<GoalsPage />} />
               <Route path="/calendar"     element={<CalendarPage />} />
               <Route path="/reports"      element={<ReportsPage />} />
               <Route path="/simulator"    element={<SimulatorPage />} />

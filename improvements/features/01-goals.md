@@ -1,5 +1,11 @@
 # F-01 — Metas financeiras (Goals)
 
+> **Implementado** na tela `/goals` (`apps.goals` no backend, `GoalsPage` no frontend).
+> A versão entregue inverte o fluxo descrito abaixo: em vez de o usuário informar o prazo,
+> ele informa quanto quer destinar por mês e o prazo é calculado a partir da sobra mensal
+> (recorrências de receita − recorrências de despesa − média de faturas − média de gastos
+> variáveis). `target_date` virou um campo opcional, usado só para comparar com a projeção.
+
 **Categoria:** Funcionalidade core
 **Estimativa:** Alta
 **Valor pro usuário:** Alto — disciplina financeira é o caso de uso #1 de apps assim

@@ -13,6 +13,7 @@ import {
   Calendar,
   BarChart2,
   Calculator,
+  Target,
   X,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
@@ -46,6 +47,7 @@ const navGroups = [
       { to: "/categories", icon: Tag, label: "Categorias" },
       { to: "/recurrences", icon: RefreshCw, label: "Recorrências" },
       { to: "/receivables", icon: Users, label: "A Receber" },
+      { to: "/goals", icon: Target, label: "Metas" },
       { to: "/calendar", icon: Calendar, label: "Calendário" },
       { to: "/reports", icon: BarChart2, label: "Relatórios" },
     ],

@@ -10,6 +10,7 @@ Plataforma web de gestão financeira pessoal. Centralize contas bancárias, lan�
 - **Cartões de crédito** com controle de faturas e parcelamentos
 - **Categorias** para organizar os gastos
 - **Recorrências** para despesas e receitas fixas
+- **Metas financeiras** com prazo calculado a partir da sobra mensal (salários − contas fixas − faturas − gastos médios)
 - **A receber** para controlar valores emprestados
 
 ## Stack

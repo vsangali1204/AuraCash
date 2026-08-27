@@ -165,3 +165,83 @@ export interface PaymentMethodSummary {
   count: number;
   percentage: number;
 }
+
+export interface GoalContribution {
+  id: string;
+  goalId: string;
+  amount: number;
+  date: string;
+  accountId?: string | null;
+  accountName?: string | null;
+  notes?: string | null;
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  description: string;
+  targetAmount: number;
+  initialAmount: number;
+  currentAmount: number;
+  remainingAmount: number;
+  progressPct: number;
+  monthlyContribution?: number | null;
+  priority: number;
+  targetDate?: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  color: string;
+  icon: string;
+  status: string;
+  contributions: GoalContribution[];
+  /** Campos de projeção — só vêm preenchidos na query goalPlan */
+  monthlyAllocation?: number | null;
+  monthsToComplete?: number | null;
+  forecastDate?: string | null;
+  requiredMonthly?: number | null;
+  onTrack?: boolean | null;
+  isReachable?: boolean;
+}
+
+export interface GoalIncomeSource {
+  description: string;
+  amount: number;
+  dayOfMonth: number;
+  accountName: string;
+}
+
+export interface GoalExpenseItem {
+  description: string;
+  amount: number;
+  kind: "recurrence" | "card" | "variable";
+}
+
+export interface MonthlyCapacity {
+  recurringIncome: number;
+  extraIncomeAverage: number;
+  totalIncome: number;
+  recurringExpenses: number;
+  cardInvoiceAverage: number;
+  variableExpenseAverage: number;
+  totalExpenses: number;
+  available: number;
+  monthsWindow: number;
+  incomeSources: GoalIncomeSource[];
+  expenseItems: GoalExpenseItem[];
+}
+
+export interface GoalPlan {
+  monthlyBudget: number;
+  strategy: string;
+  monthsWindow: number;
+  budgetIsCustom: boolean;
+  exceedsCapacity: boolean;
+  capacity: MonthlyCapacity;
+  goals: Goal[];
+  totalTarget: number;
+  totalSaved: number;
+  totalRemaining: number;
+  committedMonthly: number;
+  allGoalsForecastDate?: string | null;
+  monthsUntilAllGoals?: number | null;
+}

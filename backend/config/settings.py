@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "apps.credit_cards",
     "apps.recurrences",
     "apps.receivables",
+    "apps.goals",
     "django_celery_beat",
 ]
 
