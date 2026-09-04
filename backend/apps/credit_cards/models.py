@@ -84,6 +84,12 @@ class Invoice(models.Model):
         max_length=10, choices=Status.choices, default=Status.OPEN
     )
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    financed_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Parte da fatura que foi parcelada para as faturas seguintes",
+    )
 
     class Meta:
         verbose_name = "Fatura"
@@ -93,6 +99,12 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"Fatura {self.reference_month.strftime('%m/%Y')} - {self.credit_card.name}"
+
+    @property
+    def settled_amount(self) -> Decimal:
+        """Quanto da fatura já foi quitado: dinheiro pago + parte parcelada
+        (que virou parcelas nas faturas seguintes)."""
+        return self.paid_amount + self.financed_amount
 
     @property
     def total_amount(self) -> Decimal:

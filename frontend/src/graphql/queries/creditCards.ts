@@ -8,6 +8,7 @@ const INVOICE_FIELDS = gql`
     dueDate
     totalAmount
     paidAmount
+    financedAmount
     status
   }
 `;
@@ -101,6 +102,7 @@ export const ALL_INVOICES_QUERY = gql`
       dueDate
       totalAmount
       paidAmount
+      financedAmount
       status
       creditCardId
       creditCardName

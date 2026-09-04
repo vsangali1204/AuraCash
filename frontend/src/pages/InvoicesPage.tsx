@@ -1,9 +1,5 @@
-import { useMutation, useQuery } from "@apollo/client";
+import { useQuery } from "@apollo/client";
 import { useState, useMemo, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import toast from "react-hot-toast";
-import { z } from "zod";
 import {
   CreditCard as CardIcon,
   DollarSign,
@@ -17,16 +13,13 @@ import {
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
+import { PayInvoiceModal } from "@/components/PayInvoiceModal";
 import { InvoiceTimeline } from "@/components/charts/InvoiceTimeline";
 import { InvoiceStatusBadge } from "@/components/ui/InvoiceStatusBadge";
 import {
   CREDIT_CARDS_QUERY,
   ALL_INVOICES_QUERY,
   INVOICES_QUERY,
-  PAY_INVOICE_MUTATION,
 } from "@/graphql/queries/creditCards";
 import { INVOICE_TRANSACTIONS_QUERY, INVOICE_MONTH_SUMMARY_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
@@ -36,16 +29,10 @@ import {
   formatDate,
   formatMonthYear,
   CREDIT_CARD_BRAND_LABELS,
-  todayISO,
+  invoiceOutstanding,
+  invoiceSettled,
 } from "@/lib/utils";
 import type { Account, CreditCard, Invoice, InvoiceWithCard, Transaction } from "@/types";
-
-const paySchema = z.object({
-  amount: z.coerce.number().positive("Valor deve ser positivo"),
-  sourceAccountId: z.string().min(1, "Conta obrigatória"),
-  paymentDate: z.string().min(1, "Data obrigatória"),
-});
-type PayFormData = z.infer<typeof paySchema>;
 
 function getMonthYM(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
@@ -119,7 +106,7 @@ export function InvoicesPage() {
 
     // Total em aberto (todas as faturas não pagas, todos os cartões)
     const openInvoices = allInvoices.filter((inv) => ["open", "partial", "closed"].includes(inv.status));
-    const totalOpen = openInvoices.reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
+    const totalOpen = openInvoices.reduce((sum, inv) => sum + invoiceOutstanding(inv), 0);
     const openCount = openInvoices.length;
     const openCardsCount = new Set(openInvoices.map((i) => i.creditCardId)).size;
 
@@ -147,25 +134,8 @@ export function InvoicesPage() {
     return Array.from(groups.entries());
   }, [transactions]);
 
-  const [payInvoice, { loading: paying }] = useMutation(PAY_INVOICE_MUTATION, {
-    refetchQueries: [CREDIT_CARDS_QUERY, ALL_INVOICES_QUERY, INVOICES_QUERY],
-    onCompleted: () => { toast.success("Pagamento registrado!"); setPayingInvoice(null); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const payForm = useForm<PayFormData>({
-    resolver: zodResolver(paySchema),
-    defaultValues: { paymentDate: todayISO() },
-  });
-
   function openPay(inv: Invoice) {
     setPayingInvoice(inv);
-    payForm.reset({ amount: inv.totalAmount - inv.paidAmount, sourceAccountId: "", paymentDate: todayISO() });
-  }
-
-  function onPaySubmit(data: PayFormData) {
-    if (!payingInvoice) return;
-    payInvoice({ variables: { input: { invoiceId: payingInvoice.id, ...data } } });
   }
 
   const usedAmount = selectedCard ? selectedCard.totalLimit - selectedCard.availableLimit : 0;
@@ -235,7 +205,7 @@ export function InvoicesPage() {
               </div>
               <p className="text-[11px] text-gray-500">Próximo vencimento</p>
               <p className={cn("text-base font-bold tabular-nums sm:text-lg", color)}>
-                {inv ? formatCurrency(inv.totalAmount - inv.paidAmount) : "—"}
+                {inv ? formatCurrency(invoiceOutstanding(inv)) : "—"}
               </p>
               <p className="text-[11px] text-gray-600">
                 {inv ? `${subText} · ${formatDate(inv.dueDate)}` : subText}
@@ -376,9 +346,14 @@ export function InvoicesPage() {
                       <p className={cn("text-xl font-bold tabular-nums", isActive ? "text-white" : "text-gray-200")}>
                         {formatCurrency(inv.totalAmount)}
                       </p>
-                      {inv.status !== "paid" && inv.paidAmount > 0 && (
+                      {inv.status !== "paid" && invoiceSettled(inv) > 0 && (
                         <p className="text-[11px] text-amber-400 mt-0.5">
-                          falta {formatCurrency(inv.totalAmount - inv.paidAmount)}
+                          falta {formatCurrency(invoiceOutstanding(inv))}
+                        </p>
+                      )}
+                      {inv.financedAmount > 0 && (
+                        <p className="text-[11px] text-violet-400 mt-0.5">
+                          {formatCurrency(inv.financedAmount)} parcelado
                         </p>
                       )}
                     </div>
@@ -502,7 +477,7 @@ export function InvoicesPage() {
                           selectedInvoice.status === "paid" ? "bg-emerald-500" : "bg-sky-500"
                         )}
                         style={{
-                          width: `${Math.min(100, (selectedInvoice.paidAmount / selectedInvoice.totalAmount) * 100)}%`,
+                          width: `${Math.min(100, (invoiceSettled(selectedInvoice) / selectedInvoice.totalAmount) * 100)}%`,
                         }}
                       />
                     </div>
@@ -511,10 +486,12 @@ export function InvoicesPage() {
                         {selectedInvoice.paidAmount > 0
                           ? `${formatCurrency(selectedInvoice.paidAmount)} pago`
                           : "Nenhum pagamento registrado"}
+                        {selectedInvoice.financedAmount > 0 &&
+                          ` · ${formatCurrency(selectedInvoice.financedAmount)} parcelado`}
                       </span>
-                      {selectedInvoice.status !== "paid" && selectedInvoice.paidAmount < selectedInvoice.totalAmount && (
+                      {selectedInvoice.status !== "paid" && invoiceOutstanding(selectedInvoice) > 0 && (
                         <span className="text-amber-400">
-                          falta {formatCurrency(selectedInvoice.totalAmount - selectedInvoice.paidAmount)}
+                          falta {formatCurrency(invoiceOutstanding(selectedInvoice))}
                         </span>
                       )}
                       {selectedInvoice.status === "paid" && (
@@ -663,65 +640,11 @@ export function InvoicesPage() {
         </div>
       )}
 
-      {/* Modal: pagar fatura */}
-      <Modal open={!!payingInvoice} onClose={() => setPayingInvoice(null)} title="Pagar fatura" size="sm">
-        {payingInvoice && (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-surface-border bg-surface p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs text-gray-500">Fatura</p>
-                  <p className="text-sm font-semibold text-white">
-                    {formatMonthYear(payingInvoice.referenceMonth)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold tabular-nums text-white">
-                    {formatCurrency(payingInvoice.totalAmount)}
-                  </p>
-                  {payingInvoice.paidAmount > 0 && (
-                    <p className="text-xs text-amber-400">
-                      falta {formatCurrency(payingInvoice.totalAmount - payingInvoice.paidAmount)}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-            <form onSubmit={payForm.handleSubmit(onPaySubmit)} className="space-y-3">
-              <Input
-                label="Valor a pagar (R$)"
-                type="number"
-                step="0.01"
-                error={payForm.formState.errors.amount?.message}
-                {...payForm.register("amount")}
-              />
-              <Select
-                label="Conta de origem"
-                options={[
-                  { value: "", label: "Selecione a conta" },
-                  ...accounts.map((a) => ({ value: a.id, label: a.name })),
-                ]}
-                error={payForm.formState.errors.sourceAccountId?.message}
-                {...payForm.register("sourceAccountId")}
-              />
-              <Input
-                label="Data do pagamento"
-                type="date"
-                error={payForm.formState.errors.paymentDate?.message}
-                {...payForm.register("paymentDate")}
-              />
-              <div className="flex gap-3 pt-1">
-                <Button type="button" variant="secondary" className="flex-1" onClick={() => setPayingInvoice(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="flex-1" loading={paying}>
-                  <DollarSign size={14} /> Registrar
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
-      </Modal>
+      <PayInvoiceModal
+        invoice={payingInvoice}
+        accounts={accounts}
+        onClose={() => setPayingInvoice(null)}
+      />
     </div>
   );
 }

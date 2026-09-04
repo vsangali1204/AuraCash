@@ -31,6 +31,8 @@ export interface Invoice {
   dueDate: string;
   totalAmount: number;
   paidAmount: number;
+  /** Parte da fatura que foi parcelada para as faturas seguintes. */
+  financedAmount: number;
   status: string;
 }
 

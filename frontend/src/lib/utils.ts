@@ -13,6 +13,20 @@ export function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Quanto da fatura já foi quitado: dinheiro pago + a parte parcelada para as
+ *  faturas seguintes. */
+export function invoiceSettled(inv: { paidAmount: number; financedAmount?: number }): number {
+  return roundMoney(inv.paidAmount + (inv.financedAmount ?? 0));
+}
+
+/** Saldo ainda em aberto da fatura. A parte parcelada não conta como dívida
+ *  desta fatura — ela já virou parcela nas faturas seguintes. */
+export function invoiceOutstanding(
+  inv: { totalAmount: number; paidAmount: number; financedAmount?: number }
+): number {
+  return roundMoney(inv.totalAmount - invoiceSettled(inv));
+}
+
 export function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   return `${day}/${month}/${year}`;

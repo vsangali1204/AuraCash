@@ -12,16 +12,17 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { InvoiceStatusBadge } from "@/components/ui/InvoiceStatusBadge";
+import { PayInvoiceModal } from "@/components/PayInvoiceModal";
 import {
   CREDIT_CARDS_QUERY, INVOICES_QUERY,
   CREATE_CREDIT_CARD_MUTATION, UPDATE_CREDIT_CARD_MUTATION,
-  DELETE_CREDIT_CARD_MUTATION, PAY_INVOICE_MUTATION,
+  DELETE_CREDIT_CARD_MUTATION,
 } from "@/graphql/queries/creditCards";
 import { INVOICE_TRANSACTIONS_QUERY } from "@/graphql/queries/transactions";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
   formatCurrency, formatDate, formatMonthYear,
-  CREDIT_CARD_BRAND_LABELS, todayISO,
+  CREDIT_CARD_BRAND_LABELS,
 } from "@/lib/utils";
 import type { Account, CreditCard, Invoice, Transaction } from "@/types";
 
@@ -34,14 +35,7 @@ const cardSchema = z.object({
   accountId: z.string().optional(),
 });
 
-const paySchema = z.object({
-  amount: z.coerce.number().positive("Valor deve ser positivo"),
-  sourceAccountId: z.string().min(1, "Conta obrigatória"),
-  paymentDate: z.string().min(1, "Data obrigatória"),
-});
-
 type CardFormData = z.infer<typeof cardSchema>;
-type PayFormData = z.infer<typeof paySchema>;
 
 const BRAND_OPTIONS = Object.entries(CREDIT_CARD_BRAND_LABELS).map(([v, l]) => ({ value: v, label: l }));
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
@@ -52,6 +46,7 @@ export function CreditCardsPage() {
   const [editing, setEditing] = useState<CreditCard | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [payAccountId, setPayAccountId] = useState<string | null>(null);
 
   const { data: cardsData, loading } = useQuery<{ creditCards: CreditCard[] }>(CREDIT_CARDS_QUERY);
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
@@ -73,11 +68,6 @@ export function CreditCardsPage() {
     defaultValues: { brand: "visa", totalLimit: 0, closingDay: 1, dueDay: 10, accountId: "" },
   });
 
-  const payForm = useForm<PayFormData>({
-    resolver: zodResolver(paySchema),
-    defaultValues: { paymentDate: todayISO() },
-  });
-
   const [createCard, { loading: creating }] = useMutation(CREATE_CREDIT_CARD_MUTATION, {
     refetchQueries: [CREDIT_CARDS_QUERY],
     onCompleted: () => { toast.success("Cartão criado!"); closeCardModal(); },
@@ -96,11 +86,10 @@ export function CreditCardsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const [payInvoice, { loading: paying }] = useMutation(PAY_INVOICE_MUTATION, {
-    refetchQueries: [CREDIT_CARDS_QUERY, INVOICES_QUERY],
-    onCompleted: () => { toast.success("Pagamento registrado!"); setPayingInvoice(null); },
-    onError: (e) => toast.error(e.message),
-  });
+  function openPay(inv: Invoice, cardAccountId?: string | null) {
+    setPayingInvoice(inv);
+    setPayAccountId(cardAccountId ?? null);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -126,18 +115,9 @@ export function CreditCardsPage() {
     else createCard({ variables: { input } });
   }
 
-  function onPaySubmit(data: PayFormData) {
-    if (!payingInvoice) return;
-    payInvoice({
-      variables: {
-        input: {
-          invoiceId: payingInvoice.id,
-          amount: data.amount,
-          sourceAccountId: data.sourceAccountId,
-          paymentDate: data.paymentDate,
-        },
-      },
-    });
+  function onPayClose() {
+    setPayingInvoice(null);
+    setPayAccountId(null);
   }
 
   return (
@@ -220,14 +200,7 @@ export function CreditCardsPage() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => {
-                              setPayingInvoice(card.currentInvoice!);
-                              payForm.reset({
-                                amount: card.currentInvoice!.totalAmount - card.currentInvoice!.paidAmount,
-                                sourceAccountId: card.accountId ?? "",
-                                paymentDate: todayISO(),
-                              });
-                            }}
+                            onClick={() => openPay(card.currentInvoice!, card.accountId)}
                           >
                             <DollarSign size={12} /> Pagar
                           </Button>
@@ -253,7 +226,7 @@ export function CreditCardsPage() {
                     ) : (
                       <div className="space-y-2">
                         {invoices.map((inv) => (
-                          <InvoiceRow key={inv.id} invoice={inv} accountOptions={accountOptions.filter(a => a.value)} onPay={(inv) => { setPayingInvoice(inv); payForm.reset({ amount: inv.totalAmount - inv.paidAmount, sourceAccountId: card.accountId ?? "", paymentDate: todayISO() }); }} />
+                          <InvoiceRow key={inv.id} invoice={inv} onPay={(inv) => openPay(inv, card.accountId)} />
                         ))}
                       </div>
                     )}
@@ -286,26 +259,12 @@ export function CreditCardsPage() {
       </Modal>
 
       {/* Pay invoice modal */}
-      <Modal open={!!payingInvoice} onClose={() => setPayingInvoice(null)} title="Pagar fatura" size="sm">
-        {payingInvoice && (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-surface p-3 text-sm">
-              <p className="text-gray-500">Fatura {formatMonthYear(payingInvoice.referenceMonth)}</p>
-              <p className="text-white font-semibold">{formatCurrency(payingInvoice.totalAmount)}</p>
-              {payingInvoice.paidAmount > 0 && <p className="text-xs text-gray-500">Já pago: {formatCurrency(payingInvoice.paidAmount)}</p>}
-            </div>
-            <form onSubmit={payForm.handleSubmit(onPaySubmit)} className="space-y-4">
-              <Input label="Valor a pagar (R$)" type="number" step="0.01" error={payForm.formState.errors.amount?.message} {...payForm.register("amount")} />
-              <Select label="Conta de origem" options={accountOptions.filter(a => a.value)} placeholder="Selecione a conta" error={payForm.formState.errors.sourceAccountId?.message} {...payForm.register("sourceAccountId")} />
-              <Input label="Data do pagamento" type="date" error={payForm.formState.errors.paymentDate?.message} {...payForm.register("paymentDate")} />
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="secondary" onClick={() => setPayingInvoice(null)}>Cancelar</Button>
-                <Button type="submit" loading={paying}>Registrar pagamento</Button>
-              </div>
-            </form>
-          </div>
-        )}
-      </Modal>
+      <PayInvoiceModal
+        invoice={payingInvoice}
+        accounts={accounts}
+        defaultAccountId={payAccountId}
+        onClose={onPayClose}
+      />
 
       {/* Delete modal */}
       <Modal open={!!deleteId} onClose={() => setDeleteId(null)} title="Excluir cartão" size="sm" closeOnBackdropClick={false}>

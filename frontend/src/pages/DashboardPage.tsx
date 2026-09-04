@@ -100,6 +100,15 @@ export function DashboardPage() {
 
   const monthLabel = new Date(navMonth.year, navMonth.month - 1, 1)
     .toLocaleString("pt-BR", { month: "long", year: "numeric" });
+
+  // Num mês futuro o saldo de partida não é o extrato de hoje: é o que o backend
+  // projeta ter sobrado do mês anterior (zero, se aquele mês fechar no vermelho).
+  const now = new Date();
+  const isFutureMonth =
+    navMonth.year > now.getFullYear() ||
+    (navMonth.year === now.getFullYear() && navMonth.month > now.getMonth() + 1);
+  const prevMonthLabel = new Date(prevNavMonth.year, prevNavMonth.month - 1, 1)
+    .toLocaleString("pt-BR", { month: "long" });
   const balanceHistory = summary?.balanceHistory ?? [];
   const expenseByCategory = summary?.expenseByCategory ?? [];
 
@@ -171,7 +180,7 @@ export function DashboardPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <SummaryCard
-          label="Saldo Total"
+          label={isFutureMonth ? "Saldo previsto no início" : "Saldo Total"}
           value={summaryLoading ? null : (summary?.totalBalance ?? 0)}
           icon={<Wallet size={18} />}
           color="sky"
@@ -215,8 +224,17 @@ export function DashboardPage() {
         ) : (
           <div>
             {/* Ponto de partida */}
-            <div className="flex items-center justify-between pb-3 border-b border-surface-border">
-              <span className="text-sm text-gray-300">Saldo atual em contas</span>
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-surface-border">
+              <div>
+                <span className="text-sm text-gray-300">
+                  {isFutureMonth ? "Saldo de partida" : "Saldo atual em contas"}
+                </span>
+                {isFutureMonth && (
+                  <p className="text-[11px] text-gray-600">
+                    O que sobra de {prevMonthLabel} — um mês que fecha negativo começa o seguinte em zero.
+                  </p>
+                )}
+              </div>
               <span className="text-sm font-semibold text-white">{formatCurrency(summary?.totalBalance ?? 0)}</span>
             </div>
 

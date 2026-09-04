@@ -19,6 +19,7 @@ class InvoiceType:
     due_date: date
     total_amount: float
     paid_amount: float
+    financed_amount: float
     status: str
 
 
@@ -30,6 +31,7 @@ class InvoiceWithCardType:
     due_date: date
     total_amount: float
     paid_amount: float
+    financed_amount: float
     status: str
     credit_card_id: strawberry.ID
     credit_card_name: str
@@ -60,6 +62,7 @@ def map_invoice_with_card(inv: Invoice) -> InvoiceWithCardType:
         due_date=inv.due_date,
         total_amount=float(inv.total_amount),
         paid_amount=float(inv.paid_amount),
+        financed_amount=float(inv.financed_amount),
         status=_effective_status(inv),
         credit_card_id=strawberry.ID(str(inv.credit_card_id)),
         credit_card_name=inv.credit_card.name,
@@ -83,6 +86,7 @@ def map_invoice(inv: Invoice) -> InvoiceType:
         due_date=inv.due_date,
         total_amount=float(inv.total_amount),
         paid_amount=float(inv.paid_amount),
+        financed_amount=float(inv.financed_amount),
         status=_effective_status(inv),
     )
 
@@ -139,6 +143,11 @@ class PayInvoiceInput:
     amount: float
     source_account_id: strawberry.ID
     payment_date: date
+    # Parcelamento da fatura (opcional): paga `amount` agora e joga o restante
+    # para as faturas seguintes, em `installments_count` parcelas de
+    # `installment_amount` cada (a diferença para o saldo restante é o juro).
+    installments_count: Optional[int] = None
+    installment_amount: Optional[float] = None
 
 
 # ── Queries ───────────────────────────────────────────────────────────────────
@@ -255,9 +264,10 @@ class CreditCardMutation:
             raise Exception("Fatura não encontrada.")
 
         total = inv.total_amount
-        if inv.paid_amount >= total - Decimal("0.01"):
+        settled = inv.settled_amount
+        if settled >= total - Decimal("0.01"):
             inv.status = Invoice.Status.PAID
-        elif inv.paid_amount > Decimal("0"):
+        elif settled > Decimal("0"):
             inv.status = Invoice.Status.PARTIAL
         else:
             inv.status = Invoice.Status.OPEN
@@ -274,12 +284,18 @@ class CreditCardMutation:
     def pay_invoice(
         self, info: strawberry.types.Info, input: PayInvoiceInput
     ) -> InvoiceType:
+        from django.db import transaction as db_transaction
+
         from apps.accounts.models import Account
         from apps.transactions.models import Transaction
 
         user = require_auth(info)
 
-        inv = Invoice.objects.filter(id=input.invoice_id, credit_card__user=user).first()
+        inv = (
+            Invoice.objects.filter(id=input.invoice_id, credit_card__user=user)
+            .select_related("credit_card")
+            .first()
+        )
         if not inv:
             raise Exception("Fatura não encontrada.")
 
@@ -287,29 +303,121 @@ class CreditCardMutation:
         if not account:
             raise Exception("Conta não encontrada.")
 
-        payment = Decimal(str(input.amount))
+        payment = Decimal(str(input.amount)).quantize(Decimal("0.01"))
         total = inv.total_amount
-        remaining = max(total - inv.paid_amount, Decimal("0"))
+        # Saldo em aberto: desconta o que já foi pago em dinheiro e o que já foi
+        # parcelado para as faturas seguintes em um parcelamento anterior.
+        remaining = max(total - inv.settled_amount, Decimal("0"))
+        ref_label = inv.reference_month.strftime("%m/%Y")
 
-        # Registra pagamento como despesa na conta
-        Transaction.objects.create(
-            user=user,
-            description=f"Pagamento fatura {inv.credit_card.name} {inv.reference_month.strftime('%m/%Y')}",
-            amount=payment,
-            transaction_type="expense",
-            payment_method="pix",
-            date=input.payment_date,
-            account=account,
-            notes=f"Fatura ID {inv.id}",
-        )
+        # ── Parcelamento da fatura ────────────────────────────────────────────
+        n = input.installments_count
+        if n is not None:
+            if not (1 <= n <= 48):
+                raise ValueError("Quantidade de parcelas deve ser entre 1 e 48.")
+            if input.installment_amount is None or input.installment_amount <= 0:
+                raise ValueError("Informe o valor da parcela.")
+            if payment < Decimal("0"):
+                raise ValueError("Valor pago não pode ser negativo.")
+            if payment > remaining:
+                raise ValueError(
+                    f"Valor pago (R$ {payment}) é maior que o saldo em aberto da fatura "
+                    f"(R$ {remaining})."
+                )
 
-        inv.paid_amount += payment
-        # Considera quitada se paid_amount cobre o total (tolerância de 1 centavo para arredondamentos)
-        # ou se o pagamento cobre o saldo restante (protege contra paid_amount inconsistente no banco)
-        if inv.paid_amount >= total - Decimal("0.01") or payment >= remaining - Decimal("0.01"):
-            inv.status = Invoice.Status.PAID
-        else:
-            inv.status = Invoice.Status.PARTIAL
-        inv.save()
+            financed = remaining - payment
+            if financed <= Decimal("0.01"):
+                raise ValueError(
+                    "Não sobra saldo para parcelar — o valor informado já quita a fatura."
+                )
+
+            installment_value = Decimal(str(input.installment_amount)).quantize(Decimal("0.01"))
+            interest = installment_value * n - financed
+            note = (
+                f"Parcelamento da fatura {ref_label} de {inv.credit_card.name}: "
+                f"R$ {financed} em {n}x de R$ {installment_value}"
+            )
+            if interest > Decimal("0.01"):
+                note += f" (juros de R$ {interest.quantize(Decimal('0.01'))})"
+
+            with db_transaction.atomic():
+                if payment > Decimal("0"):
+                    Transaction.objects.create(
+                        user=user,
+                        description=f"Pagamento fatura {inv.credit_card.name} {ref_label}",
+                        amount=payment,
+                        transaction_type="expense",
+                        payment_method="pix",
+                        date=input.payment_date,
+                        account=account,
+                        notes=f"Fatura ID {inv.id} — entrada do parcelamento. {note}",
+                    )
+
+                # Transação-pai agrupa as parcelas (sem fatura própria, para não
+                # ser contada duas vezes junto com as parcelas filhas).
+                parent = Transaction.objects.create(
+                    user=user,
+                    description=f"Parcelamento fatura {ref_label} - {inv.credit_card.name}",
+                    amount=installment_value * n,
+                    transaction_type="expense",
+                    payment_method="credit",
+                    date=input.payment_date,
+                    credit_card=inv.credit_card,
+                    total_installments=n,
+                    notes=note,
+                )
+
+                for i in range(n):
+                    # Parcela 1 cai na fatura seguinte à que foi parcelada.
+                    target = get_or_create_invoice(
+                        inv.credit_card, add_months(inv.reference_month, i + 1)
+                    )
+                    Transaction.objects.create(
+                        user=user,
+                        description=f"Parcelamento fatura {ref_label} ({i + 1}/{n})",
+                        amount=installment_value,
+                        transaction_type="expense",
+                        payment_method="credit",
+                        date=input.payment_date,
+                        competence_date=target.due_date,
+                        credit_card=inv.credit_card,
+                        invoice=target,
+                        installment_number=i + 1,
+                        total_installments=n,
+                        parent_transaction=parent,
+                        notes=note,
+                    )
+
+                inv.paid_amount += payment
+                inv.financed_amount += financed
+                # A fatura fica quitada: parte em dinheiro, parte transferida
+                # para as faturas seguintes.
+                inv.status = Invoice.Status.PAID
+                inv.save(update_fields=["paid_amount", "financed_amount", "status"])
+
+            return map_invoice(inv)
+
+        # ── Pagamento simples (integral ou parcial) ───────────────────────────
+        with db_transaction.atomic():
+            Transaction.objects.create(
+                user=user,
+                description=f"Pagamento fatura {inv.credit_card.name} {ref_label}",
+                amount=payment,
+                transaction_type="expense",
+                payment_method="pix",
+                date=input.payment_date,
+                account=account,
+                notes=f"Fatura ID {inv.id}",
+            )
+
+            inv.paid_amount += payment
+            # Considera quitada se o total quitado cobre a fatura (tolerância de 1
+            # centavo para arredondamentos) ou se o pagamento cobre o saldo restante
+            # (protege contra paid_amount inconsistente no banco)
+            if inv.settled_amount >= total - Decimal("0.01") or payment >= remaining - Decimal("0.01"):
+                inv.status = Invoice.Status.PAID
+            else:
+                inv.status = Invoice.Status.PARTIAL
+            inv.save(update_fields=["paid_amount", "status"])
 
         return map_invoice(inv)
