@@ -52,7 +52,11 @@ export function InvoicesPage() {
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
 
   const { data: cardsData, loading: cardsLoading } = useQuery<{ creditCards: CreditCard[] }>(CREDIT_CARDS_QUERY);
-  const { data: allInvData } = useQuery<{ allInvoices: InvoiceWithCard[] }>(ALL_INVOICES_QUERY);
+  // cache-and-network: uma compra no crédito lançada em outra tela (modal
+  // rápido) precisa refletir aqui sem exigir F5.
+  const { data: allInvData } = useQuery<{ allInvoices: InvoiceWithCard[] }>(ALL_INVOICES_QUERY, {
+    fetchPolicy: "cache-and-network",
+  });
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
 
   const cards = cardsData?.creditCards ?? [];
@@ -92,6 +96,7 @@ export function InvoicesPage() {
     invoiceMonthSummary: { total: number; receivable: number; personal: number };
   }>(INVOICE_MONTH_SUMMARY_QUERY, {
     variables: { year: navMonth.year, month: navMonth.month },
+    fetchPolicy: "cache-and-network",
   });
   const monthSummary = monthSummaryData?.invoiceMonthSummary ?? monthSummaryPrev?.invoiceMonthSummary ?? null;
 

@@ -31,7 +31,7 @@ export function MainLayout() {
           </div>
         </main>
       </div>
-      <BottomNav onMoreClick={() => setMobileMenuOpen(true)} onNewTransaction={() => setQuickTransactionOpen(true)} />
+      <BottomNav onNewTransaction={() => setQuickTransactionOpen(true)} />
       <QuickTransactionModal open={quickTransactionOpen} onClose={() => setQuickTransactionOpen(false)} />
     </div>
   );

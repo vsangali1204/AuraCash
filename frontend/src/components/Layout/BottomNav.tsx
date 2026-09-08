@@ -1,19 +1,19 @@
-import { LayoutDashboard, ArrowLeftRight, CreditCard, MoreHorizontal, Plus } from "lucide-react";
+import { LayoutDashboard, FileText, RefreshCw, Users, Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 interface BottomNavProps {
-  onMoreClick: () => void;
   onNewTransaction: () => void;
 }
 
 const leftItems = [
   { to: "/", icon: LayoutDashboard, label: "Início", end: true },
-  { to: "/transactions", icon: ArrowLeftRight, label: "Lançamentos" },
+  { to: "/invoices", icon: FileText, label: "Faturas" },
 ];
 
 const rightItems = [
-  { to: "/credit-cards", icon: CreditCard, label: "Cartões" },
+  { to: "/recurrences", icon: RefreshCw, label: "Recorrências" },
+  { to: "/receivables", icon: Users, label: "A Receber" },
 ];
 
 function NavItem({ to, icon: Icon, label, end }: (typeof leftItems)[number]) {
@@ -38,7 +38,7 @@ function NavItem({ to, icon: Icon, label, end }: (typeof leftItems)[number]) {
   );
 }
 
-export function BottomNav({ onMoreClick, onNewTransaction }: BottomNavProps) {
+export function BottomNav({ onNewTransaction }: BottomNavProps) {
   return (
     <nav aria-label="Navegação principal" className="safe-bottom fixed bottom-0 left-0 right-0 z-40 flex h-[4.5rem] items-stretch border-t border-white/[0.08] bg-surface-card/95 backdrop-blur md:hidden">
       {leftItems.map((item) => <NavItem key={item.to} {...item} />)}
@@ -55,17 +55,6 @@ export function BottomNav({ onMoreClick, onNewTransaction }: BottomNavProps) {
       </button>
 
       {rightItems.map((item) => <NavItem key={item.to} {...item} />)}
-
-      <button
-        onClick={onMoreClick}
-        aria-label="Mais opções"
-        className="flex flex-1 flex-col items-center justify-center gap-0.5"
-      >
-        <span className="flex h-8 w-10 items-center justify-center rounded-2xl">
-          <MoreHorizontal size={19} className="text-gray-500" />
-        </span>
-        <span className="text-[10px] font-medium text-gray-600">Mais</span>
-      </button>
     </nav>
   );
 }

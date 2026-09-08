@@ -118,6 +118,10 @@ export function TransactionsPage() {
       limit: 200,
       offset: 0,
     },
+    // Um lançamento pode ter sido criado em outra tela (modal rápido) enquanto
+    // esta página estava desmontada — sempre busca de novo ao entrar, em vez
+    // de confiar só no cache.
+    fetchPolicy: "cache-and-network",
   });
 
   const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
@@ -184,19 +188,19 @@ export function TransactionsPage() {
   }
 
   const [createTransaction, { loading: creating }] = useMutation(CREATE_TRANSACTION_MUTATION, {
-    refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
+    refetchQueries: "active",
     onCompleted: () => { toast.success("Lançamento criado!"); closeModal(); },
     onError: (e) => toast.error(e.message),
   });
 
   const [updateTransaction, { loading: updating }] = useMutation(UPDATE_TRANSACTION_MUTATION, {
-    refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
+    refetchQueries: "active",
     onCompleted: () => { toast.success("Lançamento atualizado!"); closeModal(); },
     onError: (e) => toast.error(e.message),
   });
 
   const [deleteTransaction, { loading: deleting }] = useMutation(DELETE_TRANSACTION_MUTATION, {
-    refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
+    refetchQueries: "active",
     onCompleted: () => { toast.success("Lançamento removido!"); setDeleteId(null); },
     onError: (e) => toast.error(e.message),
   });

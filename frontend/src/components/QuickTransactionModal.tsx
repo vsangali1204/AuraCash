@@ -12,7 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import { CATEGORIES_QUERY } from "@/graphql/queries/categories";
 import { CREDIT_CARDS_QUERY } from "@/graphql/queries/creditCards";
-import { CREATE_TRANSACTION_MUTATION, TRANSACTIONS_QUERY } from "@/graphql/queries/transactions";
+import { CREATE_TRANSACTION_MUTATION } from "@/graphql/queries/transactions";
 import { todayISO } from "@/lib/utils";
 import type { Account, Category, CreditCard } from "@/types";
 
@@ -55,7 +55,9 @@ export function QuickTransactionModal({ open, onClose }: { open: boolean; onClos
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [create, { loading }] = useMutation(CREATE_TRANSACTION_MUTATION, {
-    refetchQueries: [TRANSACTIONS_QUERY, ACCOUNTS_QUERY],
+    // "active" atualiza qualquer tela aberta no momento (dashboard, faturas,
+    // recorrências...) — o lançamento pode ser criado de qualquer página.
+    refetchQueries: "active",
     onCompleted: () => { toast.success("Lançamento criado!"); onClose(); },
     onError: (e) => toast.error(e.message),
   });

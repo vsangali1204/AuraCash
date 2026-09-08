@@ -26,11 +26,31 @@ export function Modal({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(open);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Captura o elemento focado antes do modal abrir (ainda durante o render,
+  // antes do DOM do modal existir) pra devolver o foco a ele quando fechar.
+  if (open && !wasOpen.current) {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+  }
+  wasOpen.current = open;
 
   useEffect(() => {
+    if (!open) return;
+
+    document.body.style.overflow = "hidden";
+    // Só assume o foco se nada dentro do modal já estiver focado (ex.: um
+    // campo com autoFocus) — senão essa troca de foco compete com o
+    // autoFocus do campo e some o cursor assim que o usuário começa a digitar.
+    if (panelRef.current && !panelRef.current.contains(document.activeElement)) {
+      panelRef.current.focus();
+    }
+
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === "Tab" && panelRef.current) {
@@ -47,19 +67,14 @@ export function Modal({
         }
       }
     };
+    document.addEventListener("keydown", handleKey);
 
-    if (open) {
-      previouslyFocused.current = document.activeElement as HTMLElement | null;
-      document.addEventListener("keydown", handleKey);
-      document.body.style.overflow = "hidden";
-      panelRef.current?.focus();
-    }
     return () => {
       document.removeEventListener("keydown", handleKey);
       document.body.style.overflow = "";
-      if (open) previouslyFocused.current?.focus();
+      previouslyFocused.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

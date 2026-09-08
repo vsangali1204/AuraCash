@@ -59,9 +59,11 @@ export function DashboardPage() {
     );
   }
 
+  // cache-and-network nas queries visíveis "acima da dobra": um lançamento
+  // criado em outra tela (modal rápido) não deve exigir F5 pra aparecer aqui.
   const { data: summaryData, loading: summaryLoading } = useQuery<{ dashboardSummary: DashboardSummary }>(
     DASHBOARD_SUMMARY_QUERY,
-    { variables: { year: navMonth.year, month: navMonth.month } }
+    { variables: { year: navMonth.year, month: navMonth.month }, fetchPolicy: "cache-and-network" }
   );
 
   const prevNavMonth = navMonth.month === 1
@@ -73,14 +75,19 @@ export function DashboardPage() {
     { variables: { year: prevNavMonth.year, month: prevNavMonth.month } }
   );
 
-  const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY);
+  const { data: accountsData } = useQuery<{ accounts: Account[] }>(ACCOUNTS_QUERY, {
+    fetchPolicy: "cache-and-network",
+  });
   const { data: txData } = useQuery<{ transactions: Transaction[] }>(TRANSACTIONS_QUERY, {
     variables: { limit: 8, offset: 0 },
+    fetchPolicy: "cache-and-network",
   });
   const { data: recData } = useQuery<{ recurrences: Recurrence[] }>(RECURRENCES_QUERY, {
     variables: { activeOnly: true },
   });
-  const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY);
+  const { data: receivablesData } = useQuery<{ receivableSummary: ReceivableSummary[] }>(RECEIVABLE_SUMMARY_QUERY, {
+    fetchPolicy: "cache-and-network",
+  });
   const { data: pendingData } = useQuery<{ pendingRecurrences: Transaction[] }>(PENDING_RECURRENCES_QUERY);
   const { data: installmentsData } = useQuery<{ installmentsByMonth: InstallmentMonthSummary[] }>(INSTALLMENTS_BY_MONTH_QUERY);
 
