@@ -350,6 +350,7 @@ class CreditCardMutation:
                         payment_method="pix",
                         date=input.payment_date,
                         account=account,
+                        is_invoice_payment=True,
                         notes=f"Fatura ID {inv.id} — entrada do parcelamento. {note}",
                     )
 
@@ -407,6 +408,7 @@ class CreditCardMutation:
                 payment_method="pix",
                 date=input.payment_date,
                 account=account,
+                is_invoice_payment=True,
                 notes=f"Fatura ID {inv.id}",
             )
 

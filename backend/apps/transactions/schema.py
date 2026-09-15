@@ -147,9 +147,15 @@ def _with_effective_date(qs):
     correspondente — que pode ser um mês diferente do da compra), senão a
     própria date. Também exclui a transação-pai de parcelamentos: ela guarda
     o valor total da compra só para referência, e sem isso entraria somada
-    de novo por cima das parcelas filhas no mesmo mês da compra."""
-    return qs.exclude(parent_transaction__isnull=True, total_installments__gt=1).annotate(
-        effective_date=Coalesce("competence_date", "date")
+    de novo por cima das parcelas filhas no mesmo mês da compra. E exclui
+    lançamentos de quitação de fatura (is_invoice_payment): o gasto que eles
+    quitam já foi contado nos lançamentos de crédito com competence_date no
+    mês da fatura, então contar a baixa em dinheiro de novo duplicaria o
+    mesmo gasto."""
+    return (
+        qs.exclude(parent_transaction__isnull=True, total_installments__gt=1)
+        .exclude(is_invoice_payment=True)
+        .annotate(effective_date=Coalesce("competence_date", "date"))
     )
 
 

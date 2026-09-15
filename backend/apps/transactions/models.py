@@ -112,6 +112,17 @@ class Transaction(models.Model):
         help_text="Criado pela task de recorrência, aguarda confirmação do usuário",
     )
 
+    # ── Pagamento de fatura ───────────────────────────────────────────────────
+    is_invoice_payment = models.BooleanField(
+        default=False,
+        help_text=(
+            "Lançamento de quitação de fatura (saída da conta corrente). O gasto em si já "
+            "foi contado nos lançamentos de crédito com competence_date no mês da fatura — "
+            "esse aqui é só a baixa em dinheiro, e entra por fora dos relatórios mensais de "
+            "receita/despesa para não contar o mesmo gasto duas vezes."
+        ),
+    )
+
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
