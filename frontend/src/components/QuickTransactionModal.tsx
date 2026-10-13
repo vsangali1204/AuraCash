@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { z } from "zod";
 
+import { InvoiceMonthSelect, chosenFirstInvoiceMonth } from "@/components/InvoiceMonthSelect";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -24,6 +25,7 @@ const schema = z.object({
   date: z.string().min(1, "Data obrigatória"),
   accountId: z.string().optional(), transferAccountId: z.string().optional(),
   creditCardId: z.string().optional(), totalInstallments: z.coerce.number().min(1).max(48).optional(),
+  invoiceOffset: z.coerce.number().int().min(0).optional(),
   categoryId: z.string().optional(), notes: z.string().optional(), isReceivable: z.boolean().default(false),
   debtorName: z.string().optional(), competenceDate: z.string().optional(),
 });
@@ -42,16 +44,20 @@ export function QuickTransactionModal({ open, onClose }: { open: boolean; onClos
   const accounts = accountsData?.accounts ?? [];
   const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { transactionType: "expense", paymentMethod: "pix", date: todayISO(), totalInstallments: 1 },
+    defaultValues: { transactionType: "expense", paymentMethod: "pix", date: todayISO(), totalInstallments: 1, invoiceOffset: 0 },
   });
   const type = watch("transactionType");
   const payment = watch("paymentMethod");
   const isTransfer = type === "transfer";
   const isCredit = payment === "credit";
   const isReceivable = watch("isReceivable");
+  const cards = cardsData?.creditCards ?? [];
+  const selectedCard = cards.find((c) => c.id === watch("creditCardId"));
+  const purchaseDate = watch("date");
+  const installmentsCount = Number(watch("totalInstallments")) || 1;
 
   useEffect(() => {
-    if (open) reset({ transactionType: "expense", paymentMethod: "pix", date: todayISO(), totalInstallments: 1, accountId: accounts[0]?.id ?? "", isReceivable: false });
+    if (open) reset({ transactionType: "expense", paymentMethod: "pix", date: todayISO(), totalInstallments: 1, invoiceOffset: 0, accountId: accounts[0]?.id ?? "", isReceivable: false });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [create, { loading }] = useMutation(CREATE_TRANSACTION_MUTATION, {
@@ -78,6 +84,9 @@ export function QuickTransactionModal({ open, onClose }: { open: boolean; onClos
     if (data.paymentMethod === "credit") {
       input.creditCardId = data.creditCardId || null; input.accountId = null;
       input.totalInstallments = data.transactionType === "income" ? 1 : data.totalInstallments ?? 1;
+      input.firstInvoiceMonth = chosenFirstInvoiceMonth(
+        cards.find((c) => c.id === data.creditCardId), data.date, data.invoiceOffset ?? 0,
+      );
     } else if (data.transactionType === "transfer") {
       input.accountId = data.accountId || null; input.transferAccountId = data.transferAccountId || null;
     } else input.accountId = data.accountId || null;
@@ -86,7 +95,7 @@ export function QuickTransactionModal({ open, onClose }: { open: boolean; onClos
 
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
   const categoryOptions = [{ value: "", label: "Sem categoria" }, ...(categoriesData?.categories ?? []).map((c) => ({ value: c.id, label: c.name }))];
-  const cardOptions = (cardsData?.creditCards ?? []).map((c) => ({ value: c.id, label: c.name }));
+  const cardOptions = cards.map((c) => ({ value: c.id, label: c.name }));
 
   return (
     <Modal open={open} onClose={onClose} title="Novo lançamento" size="lg" closeOnBackdropClick={!isDirty}>
@@ -108,6 +117,9 @@ export function QuickTransactionModal({ open, onClose }: { open: boolean; onClos
           <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
             <Select label="Cartão" options={cardOptions} placeholder="Selecione" {...register("creditCardId")} />
             {type === "expense" && <Input label="Parcelas" type="number" min={1} max={48} {...register("totalInstallments")} />}
+            {selectedCard && purchaseDate && (
+              <InvoiceMonthSelect card={selectedCard} date={purchaseDate} installments={type === "expense" ? installmentsCount : 1} {...register("invoiceOffset")} />
+            )}
           </div>
         ) : isTransfer ? (
           <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">

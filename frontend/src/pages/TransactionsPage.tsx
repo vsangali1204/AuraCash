@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 
+import { InvoiceMonthSelect, chosenFirstInvoiceMonth } from "@/components/InvoiceMonthSelect";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -42,6 +43,7 @@ const schema = z.object({
   transferAccountId: z.string().optional(),
   creditCardId: z.string().optional(),
   totalInstallments: z.coerce.number().min(1).max(48).optional(),
+  invoiceOffset: z.coerce.number().int().min(0).optional(),
   categoryId: z.string().optional(),
   isReceivable: z.boolean().default(false),
   debtorName: z.string().optional(),
@@ -154,6 +156,7 @@ export function TransactionsPage() {
       date: todayISO(),
       isReceivable: false,
       totalInstallments: 1,
+      invoiceOffset: 0,
       competenceDate: "",
     },
   });
@@ -163,6 +166,9 @@ export function TransactionsPage() {
   const isReceivable = watch("isReceivable");
   const isCreditPayment = paymentMethod === "credit";
   const isTransfer = transactionType === "transfer";
+  const selectedCard = cards.find((c) => c.id === watch("creditCardId"));
+  const purchaseDate = watch("date");
+  const installmentsCount = Number(watch("totalInstallments")) || 1;
 
   // Quando muda para transferência, força paymentMethod = "transfer"
   useEffect(() => {
@@ -218,6 +224,7 @@ export function TransactionsPage() {
       creditCardId: "",
       transferAccountId: "",
       totalInstallments: 1,
+      invoiceOffset: 0,
       isReceivable: false,
       debtorName: "",
       competenceDate: "",
@@ -289,6 +296,9 @@ export function TransactionsPage() {
         createInput.accountId = null;
         // Estorno (income) nunca tem parcelas
         createInput.totalInstallments = data.transactionType === "income" ? 1 : (data.totalInstallments ?? 1);
+        createInput.firstInvoiceMonth = chosenFirstInvoiceMonth(
+          cards.find((c) => c.id === data.creditCardId), data.date, data.invoiceOffset ?? 0,
+        );
       } else if (data.transactionType === "transfer") {
         createInput.accountId = data.accountId || null;
         createInput.transferAccountId = data.transferAccountId || null;
@@ -623,6 +633,14 @@ export function TransactionsPage() {
               <Select label="Cartão" options={cardOptions} placeholder="Selecione" error={errors.creditCardId?.message} {...register("creditCardId")} />
               {!editing && transactionType === "expense" && (
                 <Input label="Parcelas" type="number" min={1} max={48} error={errors.totalInstallments?.message} {...register("totalInstallments")} />
+              )}
+              {!editing && selectedCard && purchaseDate && (
+                <InvoiceMonthSelect
+                  card={selectedCard}
+                  date={purchaseDate}
+                  installments={transactionType === "expense" ? installmentsCount : 1}
+                  {...register("invoiceOffset")}
+                />
               )}
             </div>
           ) : isTransfer ? (

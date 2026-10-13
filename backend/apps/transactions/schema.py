@@ -461,6 +461,11 @@ class CreateTransactionInput:
     is_receivable: bool = False
     debtor_name: Optional[str] = None
     competence_date: Optional[date] = None
+    # Crédito: fatura (1º dia do mês) onde cai a 1ª parcela. Vazio = a que a
+    # data da compra define pelo fechamento do cartão. Serve para compras em
+    # que o banco joga a cobrança mais para frente (ex.: Pix parcelado com
+    # 1ª parcela só daqui a alguns meses).
+    first_invoice_month: Optional[date] = None
     notes: Optional[str] = None
 
 
@@ -1003,6 +1008,22 @@ def _propagate_installment_fields(t: Transaction, input: "UpdateTransactionInput
             child.save()
 
 
+def _resolve_first_invoice_month(credit_card, purchase_date: date, requested: Optional[date]) -> date:
+    """Fatura da 1ª parcela: a escolhida pelo usuário, desde que não seja
+    anterior à que o fechamento do cartão define para a data da compra."""
+    from apps.credit_cards.models import add_months, get_first_invoice_month
+
+    natural = get_first_invoice_month(credit_card, purchase_date)
+    if requested is None:
+        return natural
+    month = requested.replace(day=1)
+    if month < natural:
+        raise ValueError("A 1ª parcela não pode cair numa fatura anterior à da data da compra.")
+    if month > add_months(natural, 12):
+        raise ValueError("A 1ª parcela deve cair em até 12 meses após a fatura da compra.")
+    return month
+
+
 # ── Mutations ─────────────────────────────────────────────────────────────────
 
 @strawberry.type
@@ -1013,7 +1034,7 @@ class TransactionMutation:
     ) -> TransactionType:
         from apps.accounts.models import Account
         from apps.categories.models import Category
-        from apps.credit_cards.models import CreditCard, get_first_invoice_month, get_or_create_invoice, add_months
+        from apps.credit_cards.models import CreditCard, get_or_create_invoice, add_months
 
         user = require_auth(info)
 
@@ -1056,7 +1077,7 @@ class TransactionMutation:
             base_installment = (total / n).quantize(Decimal("0.01"))
             remainder = total - base_installment * n
 
-            first_month = get_first_invoice_month(credit_card, input.date)
+            first_month = _resolve_first_invoice_month(credit_card, input.date, input.first_invoice_month)
 
             parent = Transaction.objects.create(
                 user=user,
@@ -1103,7 +1124,7 @@ class TransactionMutation:
 
         # ── Crédito à vista (inclui estornos/receitas no cartão) ───────────
         if credit_card:
-            first_month = get_first_invoice_month(credit_card, input.date)
+            first_month = _resolve_first_invoice_month(credit_card, input.date, input.first_invoice_month)
             invoice = get_or_create_invoice(credit_card, first_month)
             t = Transaction.objects.create(
                 user=user,
@@ -1153,12 +1174,13 @@ class TransactionMutation:
     ) -> TransactionType:
         from apps.accounts.models import Account
         from apps.categories.models import Category
-        from apps.credit_cards.models import get_first_invoice_month, get_or_create_invoice
+        from apps.credit_cards.models import add_months, get_first_invoice_month, get_or_create_invoice
 
         user = require_auth(info)
         t = Transaction.objects.filter(id=input.id, user=user).first()
         if not t:
             raise Exception("Lançamento não encontrado.")
+        old_date = t.date
 
         if input.amount is not None and input.amount <= 0:
             raise ValueError("Valor deve ser positivo.")
@@ -1195,12 +1217,22 @@ class TransactionMutation:
         if input.notes is not None:
             t.notes = input.notes
 
-        # Data mudou e lançamento ainda está num cartão → reatribui à fatura correta
-        if input.date is not None and t.credit_card is not None:
-            new_month = get_first_invoice_month(t.credit_card, t.date)
-            current_month = t.invoice.reference_month if t.invoice else None
-            if current_month != new_month:
+        # Data da compra mudou e o lançamento está numa fatura → desloca a fatura
+        # na mesma medida. Mantém a distância entre a fatura "natural" da data e
+        # a atual, que vem da posição da parcela (2/3 cai um mês depois da 1/3)
+        # ou da 1ª parcela escolhida mais para frente. O form sempre manda a
+        # data, então sem comparar com a antiga qualquer edição de uma parcela
+        # a jogaria de volta para a fatura da 1ª. O pai de um parcelamento não
+        # tem fatura e fica de fora (senão o total entraria por cima das parcelas).
+        if t.date != old_date and t.credit_card is not None and t.invoice is not None:
+            old_natural = get_first_invoice_month(t.credit_card, old_date)
+            new_natural = get_first_invoice_month(t.credit_card, t.date)
+            cur = t.invoice.reference_month
+            offset = (cur.year - old_natural.year) * 12 + cur.month - old_natural.month
+            new_month = add_months(new_natural, offset)
+            if new_month != cur:
                 t.invoice = get_or_create_invoice(t.credit_card, new_month)
+                t.competence_date = t.invoice.due_date
 
         t.save()
         _propagate_installment_fields(t, input)

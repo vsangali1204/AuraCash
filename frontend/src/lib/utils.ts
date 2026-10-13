@@ -45,6 +45,13 @@ export function todayISO() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Fatura (YYYY-MM-01) que recebe uma compra no cartão — espelha
+ * get_first_invoice_month do backend: a partir do dia de fechamento vai para a seguinte. */
+export function firstInvoiceMonth(purchaseDate: string, closingDay: number): string {
+  const month = `${purchaseDate.slice(0, 7)}-01`;
+  return Number(purchaseDate.slice(8, 10)) < closingDay ? month : addMonths(month, 1);
+}
+
 /** Soma N meses a uma data ISO (YYYY-MM-DD), preservando o dia (com clamp no último dia do mês de destino). */
 export function addMonths(dateStr: string, months: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
