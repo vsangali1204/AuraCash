@@ -18,6 +18,7 @@ import {
 } from "@/graphql/queries/creditCards";
 import { ACCOUNTS_QUERY } from "@/graphql/queries/accounts";
 import {
+  addMonths,
   cn,
   formatCurrency,
   formatMonthYear,
@@ -36,6 +37,7 @@ const paySchema = z
     paymentDate: z.string().min(1, "Data obrigatória"),
     installmentsCount: z.coerce.number().int().optional(),
     installmentAmount: z.coerce.number().optional(),
+    firstInstallmentOffset: z.coerce.number().int().min(1).max(12),
   })
   .superRefine((data, ctx) => {
     if (data.mode === "full") {
@@ -82,7 +84,7 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
 
   const form = useForm<PayFormData>({
     resolver: zodResolver(paySchema),
-    defaultValues: { mode: "full", paymentDate: todayISO() },
+    defaultValues: { mode: "full", paymentDate: todayISO(), firstInstallmentOffset: 1 },
   });
 
   const outstanding = invoice ? invoiceOutstanding(invoice) : 0;
@@ -98,6 +100,7 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
       paymentDate: todayISO(),
       installmentsCount: undefined,
       installmentAmount: undefined,
+      firstInstallmentOffset: 1,
     });
   }, [invoice, defaultAccountId, reset]);
 
@@ -105,6 +108,7 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
   const amount = Number(form.watch("amount")) || 0;
   const count = Number(form.watch("installmentsCount")) || 0;
   const installment = Number(form.watch("installmentAmount")) || 0;
+  const firstOffset = Number(form.watch("firstInstallmentOffset")) || 1;
 
   const financed = roundMoney(outstanding - amount);
   const interest = roundMoney(count * installment - financed);
@@ -119,13 +123,16 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
 
   function onSubmit(data: PayFormData) {
     if (!invoice) return;
-    const { mode: chosen, installmentsCount, installmentAmount, ...rest } = data;
+    const { mode: chosen, installmentsCount, installmentAmount, firstInstallmentOffset, ...rest } =
+      data;
     payInvoice({
       variables: {
         input: {
           invoiceId: invoice.id,
           ...rest,
-          ...(chosen === "installments" ? { installmentsCount, installmentAmount } : {}),
+          ...(chosen === "installments"
+            ? { installmentsCount, installmentAmount, firstInstallmentOffset }
+            : {}),
         },
       },
     });
@@ -223,6 +230,18 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
                   />
                 </div>
 
+                <Select
+                  label="1ª parcela na fatura de"
+                  options={[1, 2, 3].map((offset) => ({
+                    value: String(offset),
+                    label:
+                      formatMonthYear(addMonths(invoice.referenceMonth, offset)) +
+                      (offset === 1 ? " (seguinte)" : ""),
+                  }))}
+                  error={form.formState.errors.firstInstallmentOffset?.message}
+                  {...form.register("firstInstallmentOffset")}
+                />
+
                 <div className="space-y-1.5 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] p-3 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Saldo a parcelar</span>
@@ -251,8 +270,11 @@ export function PayInvoiceModal({ invoice, accounts, defaultAccountId, onClose }
                     </>
                   )}
                   <p className="pt-1 leading-relaxed text-gray-500">
-                    As parcelas entram nas próximas faturas deste cartão, começando pela seguinte a{" "}
-                    {formatMonthYear(invoice.referenceMonth)}.
+                    As parcelas entram nas faturas deste cartão a partir de{" "}
+                    {formatMonthYear(addMonths(invoice.referenceMonth, firstOffset))}
+                    {count > 1 &&
+                      ` até ${formatMonthYear(addMonths(invoice.referenceMonth, firstOffset + count - 1))}`}
+                    .
                   </p>
                 </div>
 

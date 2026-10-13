@@ -148,6 +148,10 @@ class PayInvoiceInput:
     # `installment_amount` cada (a diferença para o saldo restante é o juro).
     installments_count: Optional[int] = None
     installment_amount: Optional[float] = None
+    # Quantos meses depois da fatura parcelada cai a 1ª parcela. Normalmente é a
+    # fatura seguinte (1), mas parcelando depois do fechamento o banco pode
+    # empurrar para a outra (2).
+    first_installment_offset: int = 1
 
 
 # ── Queries ───────────────────────────────────────────────────────────────────
@@ -317,6 +321,9 @@ class CreditCardMutation:
                 raise ValueError("Quantidade de parcelas deve ser entre 1 e 48.")
             if input.installment_amount is None or input.installment_amount <= 0:
                 raise ValueError("Informe o valor da parcela.")
+            offset = input.first_installment_offset
+            if not (1 <= offset <= 12):
+                raise ValueError("A 1ª parcela deve cair entre 1 e 12 meses após a fatura.")
             if payment < Decimal("0"):
                 raise ValueError("Valor pago não pode ser negativo.")
             if payment > remaining:
@@ -369,9 +376,8 @@ class CreditCardMutation:
                 )
 
                 for i in range(n):
-                    # Parcela 1 cai na fatura seguinte à que foi parcelada.
                     target = get_or_create_invoice(
-                        inv.credit_card, add_months(inv.reference_month, i + 1)
+                        inv.credit_card, add_months(inv.reference_month, offset + i)
                     )
                     Transaction.objects.create(
                         user=user,
